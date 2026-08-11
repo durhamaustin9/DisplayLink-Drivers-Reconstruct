@@ -1,0 +1,163 @@
+#!/bin/zsh
+set -euo pipefail
+
+script_dir=$(cd "$(/usr/bin/dirname "$0")" && /bin/pwd -P)
+repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
+source_manifest="$repo_dir/manifests/16.2.39/app-contents.sha256"
+payload_manifest="$repo_dir/manifests/16.2.39/macho-payloads.sha256"
+output_info_manifest="$repo_dir/manifests/16.2.39/output-info.sha256"
+payload_source="$repo_dir/tools/macho-payload.c"
+
+if (( $# != 1 )); then
+    /bin/echo "Usage: $0 app-bundle" >&2
+    exit 64
+fi
+
+app=$1
+contents="$app/Contents"
+main_binary="$contents/MacOS/DisplayLinkUserAgent"
+info_plist="$contents/Info.plist"
+
+fail() {
+    /bin/echo "Core verification failed: $1" >&2
+    exit 65
+}
+
+[[ -d "$contents" && ! -L "$app" ]] || fail "not a regular application bundle: $app"
+[[ -f "$main_binary" && -x "$main_binary" && ! -L "$main_binary" ]] || fail "main executable is missing, linked, or non-executable"
+[[ "$(/usr/bin/stat -f '%Lp' "$main_binary")" == "755" ]] || fail "unexpected main executable mode"
+[[ -f "$source_manifest" && -f "$payload_manifest" && -f "$output_info_manifest" && -f "$payload_source" ]] || fail "verification input is missing"
+
+for forbidden in \
+    "$contents/MacOS/DisplayLinkXpcService" \
+    "$contents/MacOS/CrashRestartHelper" \
+    "$contents/Library" \
+    "$contents/Resources/Metadata.appintents" \
+    "$contents/CodeResources"; do
+    [[ ! -e "$forbidden" && ! -L "$forbidden" ]] || fail "forbidden component is present: $forbidden"
+done
+
+if /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes' "$info_plist" >/dev/null 2>&1; then
+    fail "inbound custom URL handler is still registered"
+fi
+
+unsafe_node=$(/usr/bin/find "$contents" ! -type d ! -type f -print -quit)
+[[ -z "$unsafe_node" ]] || fail "non-regular filesystem node: $unsafe_node"
+
+temp_root=$(/usr/bin/mktemp -d /tmp/displaylink-core-verify.XXXXXX)
+cleanup() {
+    if [[ -n "${temp_root:-}" && -d "$temp_root" && "$temp_root" == /tmp/displaylink-core-verify.* ]]; then
+        /bin/rm -rf -- "$temp_root"
+    fi
+}
+trap cleanup EXIT INT TERM HUP
+
+actual_files="$temp_root/actual-files"
+expected_files="$temp_root/expected-files"
+(
+    cd "$contents"
+    /usr/bin/find . -type f -print | /usr/bin/sed 's|^\./||' | LC_ALL=C /usr/bin/sort > "$actual_files"
+)
+/usr/bin/awk '
+    sub(/^[^ ]+  /, "") {
+        if ($0 == "CodeResources" || $0 == "MacOS/CrashRestartHelper" ||
+            $0 == "MacOS/DisplayLinkXpcService" || $0 ~ /^Library\// ||
+            $0 ~ /^Resources\/Metadata\.appintents\//) {
+            next
+        }
+        print
+    }
+' "$source_manifest" | LC_ALL=C /usr/bin/sort > "$expected_files"
+if ! /usr/bin/diff -u "$expected_files" "$actual_files"; then
+    fail "output file inventory differs from the pinned Core transformation"
+fi
+
+while IFS= read -r manifest_line; do
+    expected_hash=${manifest_line%% *}
+    relative_path=${manifest_line#*  }
+    case "$relative_path" in
+        CodeResources|Info.plist|MacOS/DisplayLinkUserAgent|MacOS/DisplayLinkXpcService|MacOS/CrashRestartHelper|Library/*|Resources/Metadata.appintents/*|_CodeSignature/CodeResources)
+            continue
+            ;;
+    esac
+    actual_hash=$(/usr/bin/shasum -a 256 "$contents/$relative_path" | /usr/bin/awk '{ print $1 }')
+    [[ "$actual_hash" == "$expected_hash" ]] || fail "pinned resource changed: $relative_path"
+done < "$source_manifest"
+
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info_plist")" == "com.displaylink.DisplayLinkUserAgent" ]] || fail "unexpected bundle identifier"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_plist")" == "16.2.39" ]] || fail "unexpected bundle version"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$info_plist")" == "16.2.39" ]] || fail "unexpected short version"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$info_plist")" == "DisplayLink Core (USB Only)" ]] || fail "unexpected display name"
+expected_info_hash=$(/usr/bin/awk -F '\t' '$2 == "core" && $3 == "Info.plist" { print $1 }' "$output_info_manifest")
+actual_info_hash=$(/usr/bin/shasum -a 256 "$info_plist" | /usr/bin/awk '{ print $1 }')
+[[ "$actual_info_hash" == "$expected_info_hash" ]] || fail "transformed Info.plist differs from the pinned Core profile"
+
+/usr/bin/codesign --verify --strict --all-architectures --verbose=2 "$app"
+
+architecture_list=$(/usr/bin/lipo -archs "$main_binary" 2>/dev/null) || fail "main executable is not universal Mach-O"
+[[ "$architecture_list" == "x86_64 arm64" ]] || fail "expected exactly x86_64 and arm64 (found $architecture_list)"
+
+payload_hasher="$temp_root/macho-payload"
+/usr/bin/xcrun clang -std=c11 -Wall -Wextra -Werror "$payload_source" -o "$payload_hasher" || fail "Xcode Command Line Tools are required to compile the payload verifier"
+
+require_true() {
+    local plist=$1
+    local key=$2
+    local value
+    value=$(/usr/libexec/PlistBuddy -c "Print :$key" "$plist" 2>/dev/null || true)
+    [[ "$value" == "true" ]] || fail "required entitlement is missing or false: $key"
+}
+
+require_absent() {
+    local plist=$1
+    local key=$2
+    if /usr/libexec/PlistBuddy -c "Print :$key" "$plist" >/dev/null 2>&1; then
+        fail "forbidden entitlement is present: $key"
+    fi
+}
+
+for architecture in x86_64 arm64; do
+    metadata="$temp_root/signature-$architecture.txt"
+    entitlements="$temp_root/entitlements-$architecture.plist"
+    thin_binary="$temp_root/main-$architecture"
+
+    /usr/bin/codesign --verify --strict -a "$architecture" --verbose=2 "$main_binary" || fail "signature verification failed ($architecture)"
+    /usr/bin/codesign -d -vvv -a "$architecture" "$main_binary" >/dev/null 2>"$metadata" || fail "could not inspect signature ($architecture)"
+    /usr/bin/grep -F -x -q 'Identifier=com.displaylink.DisplayLinkUserAgent' "$metadata" || fail "unexpected signing identifier ($architecture)"
+    /usr/bin/grep -F -x -q 'Signature=adhoc' "$metadata" || fail "signature is not ad hoc ($architecture)"
+    /usr/bin/grep -F -x -q 'TeamIdentifier=not set' "$metadata" || fail "TeamIdentifier is unexpectedly set ($architecture)"
+    /usr/bin/grep -F -q 'flags=0x10002(adhoc,runtime)' "$metadata" || fail "ad-hoc hardened-runtime flags are missing ($architecture)"
+    /usr/bin/grep -F -x -q 'Internal requirements count=0 size=12' "$metadata" || fail "unexpected internal signing requirements ($architecture)"
+
+    /usr/bin/codesign -d -a "$architecture" --entitlements - --xml "$main_binary" >"$entitlements" 2>/dev/null || fail "could not extract entitlements ($architecture)"
+    /usr/bin/plutil -lint "$entitlements" >/dev/null || fail "invalid entitlement plist ($architecture)"
+
+    require_true "$entitlements" "com.apple.security.app-sandbox"
+    require_true "$entitlements" "com.apple.security.device.usb"
+    for forbidden_key in \
+        "com.apple.security.network.client" \
+        "com.apple.security.network.server" \
+        "com.apple.security.application-groups" \
+        "com.apple.security.files.user-selected.read-only" \
+        "com.apple.security.files.user-selected.read-write"; do
+        require_absent "$entitlements" "$forbidden_key"
+    done
+
+    backlight_service=$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.mach-lookup.global-name:0' "$entitlements" 2>/dev/null || true)
+    [[ "$backlight_service" == "com.apple.backlightd" ]] || fail "sole local Mach exception is not com.apple.backlightd ($architecture)"
+    if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.mach-lookup.global-name:1' "$entitlements" >/dev/null 2>&1; then
+        fail "more than one local Mach-service exception is present ($architecture)"
+    fi
+
+    key_count=$(/usr/bin/grep -o '<key>' "$entitlements" | /usr/bin/wc -l | /usr/bin/tr -d ' ')
+    [[ "$key_count" == "3" ]] || fail "expected exactly three entitlement keys; found $key_count ($architecture)"
+
+    expected_hash=$(/usr/bin/awk -F '\t' -v arch="$architecture" -v path='MacOS/DisplayLinkUserAgent' \
+        '$2 == arch && $3 == path { print $1 }' "$payload_manifest")
+    [[ ${#expected_hash} == 64 && "$expected_hash" != *[^0-9a-f]* ]] || fail "missing pinned main payload hash ($architecture)"
+    /usr/bin/lipo "$main_binary" -thin "$architecture" -output "$thin_binary" || fail "could not extract architecture ($architecture)"
+    actual_hash=$("$payload_hasher" "$thin_binary" | /usr/bin/shasum -a 256 | /usr/bin/awk '{ print $1 }')
+    [[ "$actual_hash" == "$expected_hash" ]] || fail "main Mach-O payload changed ($architecture)"
+done
+
+/bin/echo "Verified the exact Core inventory, pinned resources and Mach-O payload, and both architecture-specific reduced entitlement profiles."

@@ -1,0 +1,101 @@
+#!/bin/zsh
+set -euo pipefail
+
+script_dir=$(cd "$(/usr/bin/dirname "$0")" && /bin/pwd -P)
+repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
+main_entitlements="$repo_dir/entitlements/local-main.plist"
+helper_entitlements="$repo_dir/entitlements/sandboxed-helper.plist"
+rename_source="$repo_dir/tools/rename-excl.c"
+default_source="$repo_dir/.work/source/DisplayLink Manager.app"
+default_output="$repo_dir/build/DisplayLink Local.app"
+
+if (( $# > 2 )); then
+    /bin/echo "Usage: $0 [source-app] [output-app]" >&2
+    exit 64
+fi
+
+source_app="$default_source"
+output_app="$default_output"
+if (( $# > 0 )); then
+    source_app=$1
+fi
+if (( $# > 1 )); then
+    output_app=$2
+fi
+
+fail() {
+    /bin/echo "Local build failed: $1" >&2
+    exit 65
+}
+
+[[ "$output_app" != */ ]] || fail "output path must not end with a slash"
+"$script_dir/verify-source-app" "$source_app"
+source_app=$(cd "$source_app" && /bin/pwd -P)
+
+[[ ! -e "$output_app" && ! -L "$output_app" ]] || fail "refusing to overwrite existing output: $output_app"
+
+output_parent_input=$(/usr/bin/dirname "$output_app")
+output_parent_planned=${output_parent_input:A}
+[[ "$output_parent_planned/" != "$source_app/"* ]] || fail "output must not be inside the verified source app"
+/bin/mkdir -p "$output_parent_input"
+output_parent=$(cd "$output_parent_input" && /bin/pwd -P)
+output_name=$(/usr/bin/basename "$output_app")
+output_app="$output_parent/$output_name"
+[[ ! -e "$output_app" && ! -L "$output_app" ]] || fail "refusing to overwrite existing output: $output_app"
+[[ "$output_parent/" != "$source_app/"* ]] || fail "output must not be inside the verified source app"
+
+staging_root=$(/usr/bin/mktemp -d "$output_parent/.displaylink-local.XXXXXX")
+staging_app="$staging_root/payload.app"
+rename_helper="$staging_root/rename-excl"
+
+cleanup() {
+    if [[ -n "${staging_root:-}" && -d "$staging_root" && "$staging_root" == "$output_parent"/.displaylink-local.* ]]; then
+        /bin/rm -rf -- "$staging_root"
+    fi
+}
+trap cleanup EXIT INT TERM HUP
+
+/usr/bin/xcrun clang -std=c11 -Wall -Wextra -Werror "$rename_source" -o "$rename_helper" || fail "Xcode Command Line Tools are required to compile the exclusive-rename helper"
+
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl "$source_app" "$staging_app"
+"$script_dir/verify-source-app" "$staging_app"
+
+# This ticket authenticates only the original vendor signature. Keeping it
+# after an ad-hoc re-sign would be misleading.
+/bin/rm -f -- "$staging_app/Contents/CodeResources"
+
+info_plist="$staging_app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName DisplayLink Local (No Network)' "$info_plist"
+
+sign_item() {
+    local item=$1
+    local identifier=$2
+    local entitlements=$3
+
+    /usr/bin/codesign \
+        --force \
+        --sign - \
+        --identifier "$identifier" \
+        --options runtime \
+        --timestamp=none \
+        --entitlements "$entitlements" \
+        "$item"
+}
+
+login_helper="$staging_app/Contents/Library/LoginItems/DisplayLinkLoginHelper.app"
+crash_helper="$staging_app/Contents/MacOS/CrashRestartHelper"
+xpc_service="$staging_app/Contents/MacOS/DisplayLinkXpcService"
+
+sign_item "$login_helper" "com.displaylink.DisplayLinkLoginHelper" "$helper_entitlements"
+sign_item "$crash_helper" "com.displaylink.CrashRestartHelper" "$helper_entitlements"
+sign_item "$xpc_service" "com.displaylink.DisplayLinkXpcService" "$helper_entitlements"
+sign_item "$staging_app" "com.displaylink.DisplayLinkUserAgent" "$main_entitlements"
+
+"$script_dir/verify-local-app" "$staging_app"
+[[ ! -e "$output_app" && ! -L "$output_app" ]] || fail "output appeared while building: $output_app"
+"$rename_helper" "$staging_app" "$output_app" || fail "could not atomically place output"
+[[ ! -e "$staging_app" && -d "$output_app" ]] || fail "could not atomically place output"
+"$script_dir/verify-local-app" "$output_app"
+
+/bin/echo "Built and verified: $output_app"
+/bin/echo "The app was not launched, installed, or registered."

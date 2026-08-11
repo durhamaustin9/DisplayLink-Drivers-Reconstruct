@@ -1,0 +1,182 @@
+#!/bin/zsh
+set -euo pipefail
+
+script_dir=$(cd "$(/usr/bin/dirname "$0")" && /bin/pwd -P)
+repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
+source_manifest="$repo_dir/manifests/16.2.39/app-contents.sha256"
+payload_manifest="$repo_dir/manifests/16.2.39/macho-payloads.sha256"
+output_info_manifest="$repo_dir/manifests/16.2.39/output-info.sha256"
+payload_source="$repo_dir/tools/macho-payload.c"
+
+if (( $# != 1 )); then
+    /bin/echo "Usage: $0 app-bundle" >&2
+    exit 64
+fi
+
+app=$1
+contents="$app/Contents"
+main_binary="$contents/MacOS/DisplayLinkUserAgent"
+xpc_binary="$contents/MacOS/DisplayLinkXpcService"
+crash_binary="$contents/MacOS/CrashRestartHelper"
+login_app="$contents/Library/LoginItems/DisplayLinkLoginHelper.app"
+login_binary="$login_app/Contents/MacOS/DisplayLinkLoginHelper"
+info_plist="$contents/Info.plist"
+
+fail() {
+    /bin/echo "Local verification failed: $1" >&2
+    exit 65
+}
+
+[[ -d "$contents" && ! -L "$app" ]] || fail "not a regular application bundle: $app"
+[[ ! -e "$contents/CodeResources" && ! -L "$contents/CodeResources" ]] || fail "stale vendor notarization ticket is present"
+[[ -f "$source_manifest" && -f "$payload_manifest" && -f "$output_info_manifest" && -f "$payload_source" ]] || fail "verification input is missing"
+
+for required in "$main_binary" "$xpc_binary" "$crash_binary" "$login_binary"; do
+    [[ -f "$required" && -x "$required" && ! -L "$required" ]] || fail "missing, linked, or non-executable Mach-O: $required"
+    [[ "$(/usr/bin/stat -f '%Lp' "$required")" == "755" ]] || fail "unexpected executable mode: $required"
+done
+
+unsafe_node=$(/usr/bin/find "$contents" ! -type d ! -type f -print -quit)
+[[ -z "$unsafe_node" ]] || fail "non-regular filesystem node: $unsafe_node"
+
+temp_root=$(/usr/bin/mktemp -d /tmp/displaylink-local-verify.XXXXXX)
+cleanup() {
+    if [[ -n "${temp_root:-}" && -d "$temp_root" && "$temp_root" == /tmp/displaylink-local-verify.* ]]; then
+        /bin/rm -rf -- "$temp_root"
+    fi
+}
+trap cleanup EXIT INT TERM HUP
+
+actual_files="$temp_root/actual-files"
+expected_files="$temp_root/expected-files"
+(
+    cd "$contents"
+    /usr/bin/find . -type f -print | /usr/bin/sed 's|^\./||' | LC_ALL=C /usr/bin/sort > "$actual_files"
+)
+/usr/bin/awk 'sub(/^[^ ]+  /, "") && $0 != "CodeResources" { print }' "$source_manifest" | \
+    LC_ALL=C /usr/bin/sort > "$expected_files"
+if ! /usr/bin/diff -u "$expected_files" "$actual_files"; then
+    fail "output file inventory differs from the pinned Local transformation"
+fi
+
+while IFS= read -r manifest_line; do
+    expected_hash=${manifest_line%% *}
+    relative_path=${manifest_line#*  }
+    case "$relative_path" in
+        CodeResources|Info.plist|MacOS/DisplayLinkUserAgent|MacOS/DisplayLinkXpcService|MacOS/CrashRestartHelper|Library/LoginItems/DisplayLinkLoginHelper.app/Contents/MacOS/DisplayLinkLoginHelper|Library/LoginItems/DisplayLinkLoginHelper.app/Contents/_CodeSignature/CodeResources|_CodeSignature/CodeResources)
+            continue
+            ;;
+    esac
+    actual_hash=$(/usr/bin/shasum -a 256 "$contents/$relative_path" | /usr/bin/awk '{ print $1 }')
+    [[ "$actual_hash" == "$expected_hash" ]] || fail "pinned resource changed: $relative_path"
+done < "$source_manifest"
+
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info_plist")" == "com.displaylink.DisplayLinkUserAgent" ]] || fail "unexpected bundle identifier"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_plist")" == "16.2.39" ]] || fail "unexpected bundle version"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$info_plist")" == "16.2.39" ]] || fail "unexpected short version"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$info_plist")" == "DisplayLink Local (No Network)" ]] || fail "unexpected display name"
+expected_info_hash=$(/usr/bin/awk -F '\t' '$2 == "local" && $3 == "Info.plist" { print $1 }' "$output_info_manifest")
+actual_info_hash=$(/usr/bin/shasum -a 256 "$info_plist" | /usr/bin/awk '{ print $1 }')
+[[ "$actual_info_hash" == "$expected_info_hash" ]] || fail "transformed Info.plist differs from the pinned Local profile"
+
+/usr/bin/codesign --verify --strict --all-architectures --verbose=2 "$login_app"
+/usr/bin/codesign --verify --strict --all-architectures --verbose=2 "$app"
+
+payload_hasher="$temp_root/macho-payload"
+/usr/bin/xcrun clang -std=c11 -Wall -Wextra -Werror "$payload_source" -o "$payload_hasher" || fail "Xcode Command Line Tools are required to compile the payload verifier"
+
+count_keys() {
+    /usr/bin/grep -o '<key>' "$1" | /usr/bin/wc -l | /usr/bin/tr -d ' '
+}
+
+require_true() {
+    local plist=$1
+    local key=$2
+    local value
+    value=$(/usr/libexec/PlistBuddy -c "Print :$key" "$plist" 2>/dev/null || true)
+    [[ "$value" == "true" ]] || fail "required entitlement is missing or false: $key"
+}
+
+require_absent() {
+    local plist=$1
+    local key=$2
+    if /usr/libexec/PlistBuddy -c "Print :$key" "$plist" >/dev/null 2>&1; then
+        fail "forbidden entitlement is present: $key"
+    fi
+}
+
+verify_payload() {
+    local executable=$1
+    local architecture=$2
+    local relative_path=${executable#"$contents/"}
+    local expected_hash
+    local actual_hash
+    local thin_binary="$temp_root/${relative_path//\//_}-$architecture"
+
+    expected_hash=$(/usr/bin/awk -F '\t' -v arch="$architecture" -v path="$relative_path" \
+        '$2 == arch && $3 == path { print $1 }' "$payload_manifest")
+    [[ ${#expected_hash} == 64 && "$expected_hash" != *[^0-9a-f]* ]] || fail "missing pinned payload hash: $relative_path ($architecture)"
+
+    /usr/bin/lipo "$executable" -thin "$architecture" -output "$thin_binary" || fail "could not extract architecture: $relative_path ($architecture)"
+    actual_hash=$("$payload_hasher" "$thin_binary" | /usr/bin/shasum -a 256 | /usr/bin/awk '{ print $1 }')
+    [[ "$actual_hash" == "$expected_hash" ]] || fail "Mach-O payload changed: $relative_path ($architecture)"
+}
+
+verify_executable() {
+    local executable=$1
+    local expected_identifier=$2
+    local entitlement_profile=$3
+    local architecture_list
+
+    architecture_list=$(/usr/bin/lipo -archs "$executable" 2>/dev/null) || fail "not a universal Mach-O executable: $executable"
+    [[ "$architecture_list" == "x86_64 arm64" ]] || fail "expected exactly x86_64 and arm64: $executable (found $architecture_list)"
+
+    for architecture in x86_64 arm64; do
+        local metadata="$temp_root/signature-${expected_identifier}-${architecture}.txt"
+        local entitlements="$temp_root/entitlements-${expected_identifier}-${architecture}.plist"
+
+        /usr/bin/codesign --verify --strict -a "$architecture" --verbose=2 "$executable" || fail "signature verification failed: $executable ($architecture)"
+        /usr/bin/codesign -d -vvv -a "$architecture" "$executable" >/dev/null 2>"$metadata" || fail "could not inspect signature: $executable ($architecture)"
+        /usr/bin/grep -F -x -q "Identifier=$expected_identifier" "$metadata" || fail "unexpected signing identifier: $executable ($architecture)"
+        /usr/bin/grep -F -x -q 'Signature=adhoc' "$metadata" || fail "signature is not ad hoc: $executable ($architecture)"
+        /usr/bin/grep -F -x -q 'TeamIdentifier=not set' "$metadata" || fail "TeamIdentifier is unexpectedly set: $executable ($architecture)"
+        /usr/bin/grep -F -q 'flags=0x10002(adhoc,runtime)' "$metadata" || fail "ad-hoc hardened-runtime flags are missing: $executable ($architecture)"
+        /usr/bin/grep -F -x -q 'Internal requirements count=0 size=12' "$metadata" || fail "unexpected internal signing requirements: $executable ($architecture)"
+
+        /usr/bin/codesign -d -a "$architecture" --entitlements - --xml "$executable" >"$entitlements" 2>/dev/null || fail "could not extract entitlements: $executable ($architecture)"
+        /usr/bin/plutil -lint "$entitlements" >/dev/null || fail "invalid entitlement plist: $executable ($architecture)"
+        require_true "$entitlements" "com.apple.security.app-sandbox"
+        require_absent "$entitlements" "com.apple.security.network.client"
+        require_absent "$entitlements" "com.apple.security.network.server"
+
+        if [[ "$entitlement_profile" == "main" ]]; then
+            require_true "$entitlements" "com.apple.security.device.usb"
+            require_true "$entitlements" "com.apple.security.files.user-selected.read-only"
+            require_absent "$entitlements" "com.apple.security.application-groups"
+            [[ "$(count_keys "$entitlements")" == "4" ]] || fail "main executable does not have exactly four entitlement keys ($architecture)"
+
+            local service_zero=''
+            local service_one=''
+            service_zero=$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.mach-lookup.global-name:0' "$entitlements" 2>/dev/null || true)
+            service_one=$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.mach-lookup.global-name:1' "$entitlements" 2>/dev/null || true)
+            [[ "$service_zero" == "com.displaylink.XpcService.internal" ]] || fail "unexpected first Mach-service exception ($architecture)"
+            [[ "$service_one" == "com.apple.backlightd" ]] || fail "unexpected second Mach-service exception ($architecture)"
+            if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.mach-lookup.global-name:2' "$entitlements" >/dev/null 2>&1; then
+                fail "too many Mach-service exceptions ($architecture)"
+            fi
+        else
+            require_absent "$entitlements" "com.apple.security.device.usb"
+            require_absent "$entitlements" "com.apple.security.application-groups"
+            [[ "$(count_keys "$entitlements")" == "1" ]] || fail "helper has entitlements beyond App Sandbox: $executable ($architecture)"
+        fi
+
+        verify_payload "$executable" "$architecture"
+    done
+}
+
+verify_executable "$main_binary" "com.displaylink.DisplayLinkUserAgent" main
+verify_executable "$xpc_binary" "com.displaylink.DisplayLinkXpcService" helper
+verify_executable "$crash_binary" "com.displaylink.CrashRestartHelper" helper
+verify_executable "$login_binary" "com.displaylink.DisplayLinkLoginHelper" helper
+
+/bin/echo "Verified the exact Local inventory, pinned resources and Mach-O payloads, and both architecture-specific no-direct-network entitlement profiles."

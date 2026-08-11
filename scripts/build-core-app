@@ -1,0 +1,97 @@
+#!/bin/zsh
+set -euo pipefail
+
+script_dir=$(cd "$(/usr/bin/dirname "$0")" && /bin/pwd -P)
+repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
+entitlements="$repo_dir/entitlements/core-main.plist"
+rename_source="$repo_dir/tools/rename-excl.c"
+default_source="$repo_dir/.work/source/DisplayLink Manager.app"
+default_output="$repo_dir/build/DisplayLink Core.app"
+
+if (( $# > 2 )); then
+    /bin/echo "Usage: $0 [source-app] [output-app]" >&2
+    exit 64
+fi
+
+source_app="$default_source"
+output_app="$default_output"
+if (( $# > 0 )); then
+    source_app=$1
+fi
+if (( $# > 1 )); then
+    output_app=$2
+fi
+
+fail() {
+    /bin/echo "Core build failed: $1" >&2
+    exit 65
+}
+
+[[ "$output_app" != */ ]] || fail "output path must not end with a slash"
+"$script_dir/verify-source-app" "$source_app"
+source_app=$(cd "$source_app" && /bin/pwd -P)
+
+[[ ! -e "$output_app" && ! -L "$output_app" ]] || fail "refusing to overwrite existing output: $output_app"
+
+output_parent_input=$(/usr/bin/dirname "$output_app")
+output_parent_planned=${output_parent_input:A}
+[[ "$output_parent_planned/" != "$source_app/"* ]] || fail "output must not be inside the verified source app"
+/bin/mkdir -p "$output_parent_input"
+output_parent=$(cd "$output_parent_input" && /bin/pwd -P)
+output_name=$(/usr/bin/basename "$output_app")
+output_app="$output_parent/$output_name"
+[[ ! -e "$output_app" && ! -L "$output_app" ]] || fail "refusing to overwrite existing output: $output_app"
+[[ "$output_parent/" != "$source_app/"* ]] || fail "output must not be inside the verified source app"
+
+staging_root=$(/usr/bin/mktemp -d "$output_parent/.displaylink-core.XXXXXX")
+staging_app="$staging_root/payload.app"
+rename_helper="$staging_root/rename-excl"
+
+cleanup() {
+    if [[ -n "${staging_root:-}" && -d "$staging_root" && "$staging_root" == "$output_parent"/.displaylink-core.* ]]; then
+        /bin/rm -rf -- "$staging_root"
+    fi
+}
+trap cleanup EXIT INT TERM HUP
+
+/usr/bin/xcrun clang -std=c11 -Wall -Wextra -Werror "$rename_source" -o "$rename_helper" || fail "Xcode Command Line Tools are required to compile the exclusive-rename helper"
+
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl "$source_app" "$staging_app"
+"$script_dir/verify-source-app" "$staging_app"
+
+contents="$staging_app/Contents"
+info_plist="$contents/Info.plist"
+
+# Remove the nonessential executable components and every registration artifact
+# that could launch them. The main USB/rendering process is started manually.
+/bin/rm -f -- \
+    "$contents/MacOS/CrashRestartHelper" \
+    "$contents/MacOS/DisplayLinkXpcService" \
+    "$contents/CodeResources"
+/bin/rm -rf -- \
+    "$contents/Library" \
+    "$contents/Resources/Metadata.appintents" \
+    "$contents/_CodeSignature"
+
+if /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes' "$info_plist" >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c 'Delete :CFBundleURLTypes' "$info_plist"
+fi
+/usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName DisplayLink Core (USB Only)' "$info_plist"
+
+/usr/bin/codesign \
+    --force \
+    --sign - \
+    --identifier "com.displaylink.DisplayLinkUserAgent" \
+    --options runtime \
+    --timestamp=none \
+    --entitlements "$entitlements" \
+    "$staging_app"
+
+"$script_dir/verify-core-app" "$staging_app"
+[[ ! -e "$output_app" && ! -L "$output_app" ]] || fail "output appeared while building: $output_app"
+"$rename_helper" "$staging_app" "$output_app" || fail "could not atomically place output"
+[[ ! -e "$staging_app" && -d "$output_app" ]] || fail "could not atomically place output"
+"$script_dir/verify-core-app" "$output_app"
+
+/bin/echo "Built and verified: $output_app"
+/bin/echo "The app was not launched, installed, or registered."

@@ -1,0 +1,63 @@
+#!/bin/zsh
+set -euo pipefail
+
+script_dir=$(cd "$(/usr/bin/dirname "$0")" && /bin/pwd -P)
+repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
+manifest="$repo_dir/manifests/16.2.39/app-contents.sha256"
+
+if (( $# != 1 )); then
+    /bin/echo "Usage: $0 source-app" >&2
+    exit 64
+fi
+
+source_app=$1
+contents="$source_app/Contents"
+
+fail() {
+    /bin/echo "Source verification failed: $1" >&2
+    exit 65
+}
+
+[[ -d "$contents" && ! -L "$source_app" ]] || fail "not a regular application bundle: $source_app"
+[[ -f "$manifest" && ! -L "$manifest" ]] || fail "pinned manifest is missing"
+
+for executable in \
+    "$contents/MacOS/DisplayLinkUserAgent" \
+    "$contents/MacOS/DisplayLinkXpcService" \
+    "$contents/MacOS/CrashRestartHelper" \
+    "$contents/Library/LoginItems/DisplayLinkLoginHelper.app/Contents/MacOS/DisplayLinkLoginHelper"; do
+    [[ -f "$executable" && -x "$executable" && ! -L "$executable" ]] || fail "missing, linked, or non-executable Mach-O: $executable"
+    [[ "$(/usr/bin/stat -f '%Lp' "$executable")" == "755" ]] || fail "unexpected executable mode: $executable"
+done
+
+bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$contents/Info.plist" 2>/dev/null || true)
+bundle_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$contents/Info.plist" 2>/dev/null || true)
+short_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$contents/Info.plist" 2>/dev/null || true)
+
+[[ "$bundle_id" == "com.displaylink.DisplayLinkUserAgent" ]] || fail "unexpected bundle identifier"
+[[ "$bundle_version" == "16.2.39" ]] || fail "unexpected CFBundleVersion"
+[[ "$short_version" == "16.2.39" ]] || fail "unexpected CFBundleShortVersionString"
+
+unsafe_node=$(/usr/bin/find "$contents" ! -type d ! -type f -print -quit)
+[[ -z "$unsafe_node" ]] || fail "non-regular filesystem node: $unsafe_node"
+
+check_root=$(/usr/bin/mktemp -d /tmp/displaylink-source-check.XXXXXX)
+actual_list="$check_root/actual-files"
+expected_list="$check_root/expected-files"
+
+cleanup() {
+    if [[ -n "${check_root:-}" && -d "$check_root" && "$check_root" == /tmp/displaylink-source-check.* ]]; then
+        /bin/rm -rf -- "$check_root"
+    fi
+}
+trap cleanup EXIT INT TERM HUP
+
+(
+    cd "$contents"
+    /usr/bin/find . -type f -print | /usr/bin/sed 's|^\./||' | LC_ALL=C /usr/bin/sort > "$actual_list"
+    /usr/bin/awk 'sub(/^[^ ]+  /, "") { print }' "$manifest" | LC_ALL=C /usr/bin/sort > "$expected_list"
+    /usr/bin/diff -u "$expected_list" "$actual_list"
+    /usr/bin/shasum -a 256 -c "$manifest"
+)
+
+/bin/echo "Verified the exact official DisplayLink Manager 16.2.39 source tree (32 files)."

@@ -1,0 +1,150 @@
+#!/bin/zsh
+set -euo pipefail
+
+script_dir=$(cd "$(/usr/bin/dirname "$0")" && /bin/pwd -P)
+repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
+
+fail() {
+    /bin/echo "Repository check failed: $1" >&2
+    exit 65
+}
+
+git -C "$repo_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "run this check from a Git checkout"
+git -C "$repo_dir" diff --check
+git -C "$repo_dir" diff --cached --check
+if git -C "$repo_dir" grep --cached -n -I -E '[[:blank:]]+$' >/dev/null 2>&1; then
+    fail "tracked source contains trailing whitespace"
+fi
+
+for script in "$repo_dir"/scripts/*; do
+    [[ -f "$script" ]] || continue
+    [[ -x "$script" ]] || fail "script is not executable: ${script#"$repo_dir/"}"
+    /bin/zsh -n "$script"
+done
+
+for plist in "$repo_dir"/entitlements/*.plist; do
+    /usr/bin/plutil -lint "$plist" >/dev/null
+done
+
+/usr/bin/make -C "$repo_dir/tools" syntax
+
+source_manifest="$repo_dir/manifests/16.2.39/app-contents.sha256"
+payload_manifest="$repo_dir/manifests/16.2.39/macho-payloads.sha256"
+output_info_manifest="$repo_dir/manifests/16.2.39/output-info.sha256"
+installer_manifest="$repo_dir/manifests/16.2.39/installer.sha256"
+
+/usr/bin/awk '
+    {
+        hash = substr($0, 1, 64)
+        separator = substr($0, 65, 2)
+        path = substr($0, 67)
+        wrapped = "/" path "/"
+        if (length(hash) != 64 || hash ~ /[^0-9a-f]/ || separator != "  " ||
+            path !~ /^[A-Za-z0-9_][A-Za-z0-9_. +()\/-]*$/ ||
+            wrapped ~ /\/\.\.?\// || path ~ /\/\// || seen[path]++) {
+            exit 1
+        }
+    }
+    END { if (NR != 32) exit 1 }
+' "$source_manifest" || fail "source manifest schema, path safety, uniqueness, or count is invalid"
+
+/usr/bin/awk -F '\t' '
+    BEGIN {
+        expected["MacOS/DisplayLinkUserAgent"] = 1
+        expected["MacOS/DisplayLinkXpcService"] = 1
+        expected["MacOS/CrashRestartHelper"] = 1
+        expected["Library/LoginItems/DisplayLinkLoginHelper.app/Contents/MacOS/DisplayLinkLoginHelper"] = 1
+    }
+    {
+        wrapped = "/" $3 "/"
+        if (NF != 3 || length($1) != 64 || $1 ~ /[^0-9a-f]/ ||
+            ($2 != "x86_64" && $2 != "arm64") ||
+            $3 !~ /^[A-Za-z0-9_][A-Za-z0-9_. +()\/-]*$/ ||
+            wrapped ~ /\/\.\.?\// || $3 ~ /\/\// || !expected[$3] || seen[$2 FS $3]++) {
+            exit 1
+        }
+        architecture[$2]++
+    }
+    END {
+        if (NR != 8 || architecture["x86_64"] != 4 || architecture["arm64"] != 4) exit 1
+        for (path in expected) {
+            if (!seen["x86_64" FS path] || !seen["arm64" FS path]) exit 1
+        }
+    }
+' "$payload_manifest" || fail "Mach-O payload manifest is invalid"
+
+/usr/bin/awk -F '\t' '
+    {
+        if (NF != 3 || length($1) != 64 || $1 ~ /[^0-9a-f]/ ||
+            ($2 != "local" && $2 != "core") || $3 != "Info.plist" || seen[$2]++) {
+            exit 1
+        }
+    }
+    END { if (NR != 2 || !seen["local"] || !seen["core"]) exit 1 }
+' "$output_info_manifest" || fail "transformed Info.plist manifest is invalid"
+
+installer_hash=$(/usr/bin/awk 'NR == 1 { print $0 }' "$installer_manifest")
+installer_lines=$(/usr/bin/wc -l < "$installer_manifest" | /usr/bin/tr -d ' ')
+[[ "$installer_lines" == "1" && ${#installer_hash} == 64 && "$installer_hash" != *[^0-9a-f]* ]] || fail "installer manifest is not exactly one SHA-256 value"
+
+tracked_count=0
+user_root='/Users'
+development_volume='/Volumes/Development'
+while IFS= read -r -d '' relative_path; do
+    (( tracked_count += 1 ))
+    path="$repo_dir/$relative_path"
+
+    [[ ! -L "$path" ]] || fail "tracked symbolic link: $relative_path"
+    [[ -f "$path" ]] || fail "tracked path is not a regular file: $relative_path"
+
+    case "$relative_path" in
+        .work/*|build/*|dist/*|artifacts/*|vendor/*|expanded/*|tools/build/*|.codex/*|.agents/*|.claude/*|.cursor/*|.idea/*|.vscode/*|*/.work/*|*/build/*|*/dist/*|*/artifacts/*|*/vendor/*|*/expanded/*|*/.codex/*|*/.agents/*|*/.claude/*|*/.cursor/*|*/.idea/*|*/.vscode/*)
+            fail "tracked path is inside a private/generated directory: $relative_path"
+            ;;
+        *.pkg|*.dmg|*.zip|*.tar|*.tgz|*.gz|*.bz2|*.xz|*.7z|*.rar|*.spkg|*.metallib|*.car|*.mov|*.xar|*.bom|*.der|*.codedirectory|*.cer|*.crt|*.p12|*.pfx|*.pem|*.key|*.mobileprovision|*.app/*|*/_CodeSignature/*|*/CodeResources)
+            fail "tracked proprietary/generated artifact type: $relative_path"
+            ;;
+    esac
+
+    case "$relative_path" in
+        .gitignore|LICENSE|Makefile|*/Makefile|scripts/*|*.md|*.yml|*.yaml|*.plist|*.sha256|*.c)
+            ;;
+        *)
+            fail "tracked path is outside the source/document allowlist: $relative_path"
+            ;;
+    esac
+
+    file_size=$(/usr/bin/stat -f '%z' "$path")
+    (( file_size <= 1000000 )) || fail "tracked file exceeds 1 MB: $relative_path"
+
+    file_description=$(/usr/bin/file -b "$path")
+    if [[ "$file_description" == *"Mach-O"* || "$file_description" == *"XAR archive"* || "$file_description" == *"Apple Disk Image"* ]]; then
+        fail "tracked binary/vendor archive: $relative_path ($file_description)"
+    fi
+
+    mime_type=$(/usr/bin/file -b --mime-type "$path")
+    [[ "$mime_type" == text/* ]] || fail "tracked file is not plain-text source or documentation: $relative_path ($mime_type)"
+
+    if /usr/bin/grep -E -q -- '-----BEGIN ([A-Z ]+ )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}' "$path" 2>/dev/null; then
+        fail "possible credential or private key in: $relative_path"
+    fi
+
+    if /usr/bin/grep -E -q -- "$user_root/[A-Za-z0-9._-]+|$development_volume/|serial=[0-9]{6,}" "$path" 2>/dev/null; then
+        fail "machine-specific path or EDID serial in: $relative_path"
+    fi
+done < <(git -C "$repo_dir" ls-files -z)
+
+(( tracked_count > 0 )) || fail "no tracked source files"
+
+for required_phrase in \
+    'not an open-source DisplayLink driver' \
+    'not hardware-qualified yet' \
+    'Plugable UD-3900PDZ' \
+    'distributes no DisplayLink package'; do
+    /usr/bin/grep -F -q "$required_phrase" "$repo_dir/README.md" || fail "README is missing required disclosure: $required_phrase"
+done
+
+/usr/bin/grep -F -q 'actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09' "$repo_dir/.github/workflows/source-checks.yml" || \
+    fail "GitHub checkout action is not pinned to the reviewed commit"
+
+/bin/echo "Repository checks passed for $tracked_count source-only files."

@@ -1,0 +1,73 @@
+#!/bin/zsh
+set -euo pipefail
+
+script_dir=$(cd "$(/usr/bin/dirname "$0")" && /bin/pwd -P)
+repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
+installer_manifest="$repo_dir/manifests/16.2.39/installer.sha256"
+rename_source="$repo_dir/tools/rename-excl.c"
+default_output="$repo_dir/.work/source/DisplayLink Manager.app"
+
+if (( $# < 1 || $# > 2 )); then
+    /bin/echo "Usage: $0 official-installer.pkg [output-source-app]" >&2
+    exit 64
+fi
+
+package=$1
+output_app="$default_output"
+if (( $# == 2 )); then
+    output_app=$2
+fi
+
+fail() {
+    /bin/echo "Preparation failed: $1" >&2
+    exit 65
+}
+
+[[ "$output_app" != */ ]] || fail "output path must not end with a slash"
+[[ -f "$package" && ! -L "$package" ]] || fail "installer is missing, not regular, or a symbolic link: $package"
+[[ ! -e "$output_app" && ! -L "$output_app" ]] || fail "refusing to overwrite existing source tree: $output_app"
+
+expected_hash=$(/usr/bin/awk 'NR == 1 { print $1 }' "$installer_manifest")
+actual_hash=$(/usr/bin/shasum -a 256 "$package" | /usr/bin/awk '{ print $1 }')
+[[ "$actual_hash" == "$expected_hash" ]] || fail "installer SHA-256 mismatch (expected $expected_hash, got $actual_hash)"
+
+/bin/mkdir -p "$(/usr/bin/dirname "$output_app")"
+output_parent=$(cd "$(/usr/bin/dirname "$output_app")" && /bin/pwd -P)
+output_name=$(/usr/bin/basename "$output_app")
+output_app="$output_parent/$output_name"
+[[ ! -e "$output_app" && ! -L "$output_app" ]] || fail "refusing to overwrite existing source tree: $output_app"
+
+expansion_root=$(/usr/bin/mktemp -d /tmp/displaylink-prepare.XXXXXX)
+destination_root=''
+
+cleanup() {
+    if [[ -n "${expansion_root:-}" && -d "$expansion_root" && "$expansion_root" == /tmp/displaylink-prepare.* ]]; then
+        /bin/rm -rf -- "$expansion_root"
+    fi
+    if [[ -n "${destination_root:-}" && -d "$destination_root" && "$destination_root" == "$output_parent"/.displaylink-source.* ]]; then
+        /bin/rm -rf -- "$destination_root"
+    fi
+}
+trap cleanup EXIT INT TERM HUP
+
+expanded="$expansion_root/expanded"
+destination_root=$(/usr/bin/mktemp -d "$output_parent/.displaylink-source.XXXXXX")
+staging_app="$destination_root/payload.app"
+rename_helper="$destination_root/rename-excl"
+/usr/bin/xcrun clang -std=c11 -Wall -Wextra -Werror "$rename_source" -o "$rename_helper" || fail "Xcode Command Line Tools are required to compile the exclusive-rename helper"
+
+/usr/sbin/pkgutil --expand-full "$package" "$expanded"
+expanded_app="$expanded/DisplayLinkManagerApp.pkg/Payload/DisplayLink Manager.app"
+[[ -d "$expanded_app" ]] || fail "expected application was not found in the package"
+
+"$script_dir/verify-source-app" "$expanded_app"
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl "$expanded_app" "$staging_app"
+"$script_dir/verify-source-app" "$staging_app"
+
+[[ ! -e "$output_app" && ! -L "$output_app" ]] || fail "output appeared while preparing source: $output_app"
+"$rename_helper" "$staging_app" "$output_app" || fail "could not atomically place prepared source"
+[[ ! -e "$staging_app" && -d "$output_app" ]] || fail "could not atomically place prepared source"
+"$script_dir/verify-source-app" "$output_app"
+
+/bin/echo "Prepared verified local source: $output_app"
+/bin/echo "The installer and its scripts were not executed or installed."
