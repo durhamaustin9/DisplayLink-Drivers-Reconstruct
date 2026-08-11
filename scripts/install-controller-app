@@ -1,0 +1,66 @@
+#!/bin/zsh
+set -euo pipefail
+
+script_dir=$(cd "$(/usr/bin/dirname "$0")" && /bin/pwd -P)
+repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
+rename_source="$repo_dir/tools/rename-excl.c"
+default_source="$repo_dir/build/DisplayLink Contained.app"
+default_destination="$HOME/Applications/DisplayLink Contained.app"
+
+if (( $# > 2 )); then
+    /bin/echo "Usage: $0 [verified-controller-app] [destination-app]" >&2
+    exit 64
+fi
+
+source_app="$default_source"
+destination_app="$default_destination"
+if (( $# > 0 )); then
+    source_app=$1
+fi
+if (( $# > 1 )); then
+    destination_app=$2
+fi
+
+fail() {
+    /bin/echo "Controller installation failed: $1" >&2
+    exit 65
+}
+
+[[ "$destination_app" != */ ]] || fail "destination path must not end with a slash"
+"$script_dir/verify-controller-app" "$source_app"
+source_app=$(cd "$source_app" && /bin/pwd -P)
+[[ ! -e "$destination_app" && ! -L "$destination_app" ]] || fail "refusing to overwrite existing destination: $destination_app"
+
+destination_parent_input=$(/usr/bin/dirname "$destination_app")
+destination_parent_planned=${destination_parent_input:A}
+[[ "$destination_parent_planned/" != "$source_app/"* ]] || fail "destination must not be inside the source app"
+/bin/mkdir -p "$destination_parent_input"
+destination_parent=$(cd "$destination_parent_input" && /bin/pwd -P)
+destination_name=$(/usr/bin/basename "$destination_app")
+destination_app="$destination_parent/$destination_name"
+[[ ! -e "$destination_app" && ! -L "$destination_app" ]] || fail "refusing to overwrite existing destination: $destination_app"
+[[ "$destination_parent/" != "$source_app/"* ]] || fail "destination must not be inside the source app"
+
+staging_root=$(/usr/bin/mktemp -d "$destination_parent/.displaylink-install.XXXXXX")
+staging_app="$staging_root/payload.app"
+rename_helper="$staging_root/rename-excl"
+
+cleanup() {
+    if [[ -n "${staging_root:-}" && -d "$staging_root" && "$staging_root" == "$destination_parent"/.displaylink-install.* ]]; then
+        /bin/rm -rf -- "$staging_root"
+    fi
+}
+trap cleanup EXIT INT TERM HUP
+
+/usr/bin/xcrun clang -std=c11 -Wall -Wextra -Werror "$rename_source" -o "$rename_helper" || \
+    fail "Xcode Command Line Tools are required to compile the exclusive-rename helper"
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl "$source_app" "$staging_app"
+"$script_dir/verify-controller-app" "$staging_app"
+
+[[ ! -e "$destination_app" && ! -L "$destination_app" ]] || fail "destination appeared during installation: $destination_app"
+"$rename_helper" "$staging_app" "$destination_app" || fail "could not atomically place installed app"
+[[ ! -e "$staging_app" && -d "$destination_app" ]] || fail "could not atomically place installed app"
+"$script_dir/verify-controller-app" "$destination_app"
+
+/bin/echo "Installed and verified: $destination_app"
+/bin/echo "Open this exact app from Finder or with: open \"$destination_app\""

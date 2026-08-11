@@ -14,6 +14,8 @@ design of the project.
 4. Describe exactly which dock, USB VID:PID, chip family, Mac architecture,
    macOS version, ports, modes, and lifecycle scenarios you tested.
 5. Never describe an untested device as supported.
+6. Do not claim the contained controller's open/reopen/quit lifecycle is
+   qualified without exact-path process evidence and a hardware run.
 
 ## Supporting a new DisplayLink release
 
@@ -31,3 +33,13 @@ hash check merely to accept a newer package.
   bundle identifiers.
 - Hardware tests must be explicitly invoked and must not broadly terminate
   unrelated processes.
+- Controller cleanup must bind the PID, process start time, and exact canonical
+  nested executable path, then revalidate that identity immediately before
+  signaling. Process names, bundle identifiers, path prefixes, and global helper
+  labels are not sufficient ownership evidence.
+- Controller changes must pass the reviewed direct-networking API/class and
+  framework-link gates. Because it is intentionally unsandboxed for
+  sibling-process lifecycle control, do not describe those source checks as an
+  enforced or exhaustive network denial.
+- Do not add an automatic login item or a second menu-bar status item. The
+  nested engine's existing DisplayLink item is the sole menu UI.

@@ -25,8 +25,133 @@ done
 for plist in "$repo_dir"/entitlements/*.plist; do
     /usr/bin/plutil -lint "$plist" >/dev/null
 done
+[[ -f "$repo_dir/controller/Info.plist" ]] || fail "controller Info.plist is missing"
+/usr/bin/plutil -lint "$repo_dir/controller/Info.plist" >/dev/null || fail "controller Info.plist is invalid"
 
 /usr/bin/make -C "$repo_dir/tools" syntax
+
+controller_dir="$repo_dir/controller"
+controller_main="$controller_dir/main.m"
+controller_icon="$controller_dir/generate-icon.m"
+controller_policy="$controller_dir/path_policy.c"
+controller_policy_header="$controller_dir/path_policy.h"
+controller_policy_tests="$controller_dir/tests/path_policy_tests.c"
+for controller_source in \
+    "$controller_main" \
+    "$controller_icon" \
+    "$controller_policy" \
+    "$controller_policy_header" \
+    "$controller_policy_tests"; do
+    [[ -f "$controller_source" && ! -L "$controller_source" ]] || \
+        fail "controller source is missing or linked: ${controller_source#"$repo_dir/"}"
+done
+
+controller_network_api_pattern='(^|[^[:alnum:]_])(socket|connect|connectx|bind|listen|accept|accept4|send|sendto|sendmsg|recv|recvfrom|recvmsg|getaddrinfo|getnameinfo|gethostbyname|gethostbyaddr)[[:space:]]*\('
+controller_network_identifier_pattern='(^|[^[:alnum:]_])(NSURLSession|NSURLConnection|NSMutableURLRequest|NSURLRequest|CFStreamCreatePairWithSocket|CFStreamCreatePairWithSocketToHost|CFSocket[A-Za-z0-9_]*)([^[:alnum:]_]|$)'
+controller_network_import_pattern='^[[:space:]]*(#[[:space:]]*(import|include)[[:space:]]*[<"](Network|CFNetwork|SystemConfiguration|WebKit)(/|[.>"])|@import[[:space:]]+(Network|CFNetwork|SystemConfiguration|WebKit)[[:space:]]*;)'
+if /usr/bin/grep -E -n -q -- "$controller_network_api_pattern" \
+    "$controller_main" "$controller_icon" "$controller_policy" "$controller_policy_header"; then
+    fail "controller source calls a forbidden direct networking API"
+fi
+if /usr/bin/grep -E -n -q -- "$controller_network_identifier_pattern" \
+    "$controller_main" "$controller_icon" "$controller_policy" "$controller_policy_header"; then
+    fail "controller source references a forbidden Foundation or Core Foundation networking API"
+fi
+if /usr/bin/grep -E -n -q -- "$controller_network_import_pattern" \
+    "$controller_main" "$controller_icon" "$controller_policy" "$controller_policy_header"; then
+    fail "controller source imports a forbidden networking or web framework"
+fi
+
+/usr/bin/xcrun clang \
+    -fobjc-arc \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -Wno-deprecated-declarations \
+    -mmacosx-version-min=14.0 \
+    -I "$controller_dir" \
+    -fsyntax-only \
+    "$controller_main" || fail "controller main source does not compile cleanly"
+/usr/bin/xcrun clang \
+    -fobjc-arc \
+    -Wall -Wextra -Werror \
+    -Wno-deprecated-declarations \
+    -fsyntax-only \
+    "$controller_icon" || fail "controller icon source does not compile cleanly"
+/usr/bin/xcrun clang \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -I "$controller_dir" \
+    -fsyntax-only \
+    "$controller_policy" \
+    "$controller_policy_tests" || fail "controller path-policy sources do not compile cleanly"
+
+controller_check_root=$(/usr/bin/mktemp -d /tmp/displaylink-controller-source-check.XXXXXX) || \
+    fail "could not create controller test directory"
+cleanup_controller_check() {
+    if [[ -n "${controller_check_root:-}" && -d "$controller_check_root" && \
+        "$controller_check_root" == /tmp/displaylink-controller-source-check.* ]]; then
+        /bin/rm -rf -- "$controller_check_root"
+    fi
+}
+trap cleanup_controller_check EXIT INT TERM HUP
+
+controller_policy_test_binary="$controller_check_root/path-policy-tests"
+/usr/bin/xcrun clang \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -I "$controller_dir" \
+    "$controller_policy" \
+    "$controller_policy_tests" \
+    -o "$controller_policy_test_binary" || fail "could not compile controller path-policy tests"
+"$controller_policy_test_binary" || fail "controller path-policy tests failed"
+
+controller_smoke_binary="$controller_check_root/controller-smoke"
+(
+    cd "$controller_check_root"
+    /usr/bin/xcrun clang \
+        -fobjc-arc \
+        -std=c11 \
+        -Wall -Wextra -Werror \
+        -Wno-deprecated-declarations \
+        -mmacosx-version-min=14.0 \
+        -arch x86_64 \
+        -arch arm64 \
+        -I "$controller_dir" \
+        "$controller_main" \
+        "$controller_policy" \
+        -framework AppKit \
+        -o "$controller_smoke_binary"
+) || fail "could not link the universal controller from source"
+[[ "$(/usr/bin/lipo -archs "$controller_smoke_binary")" == "x86_64 arm64" ]] || \
+    fail "source-built controller does not contain exactly x86_64 and arm64"
+
+controller_forbidden_symbol_pattern='^[[:space:]]*(_(socket|connect|connectx|bind|listen|accept|accept4|send|sendto|sendmsg|recv|recvfrom|recvmsg|getaddrinfo|getnameinfo|gethostbyname|gethostbyaddr|CFStreamCreatePairWithSocket|CFStreamCreatePairWithSocketToHost|CFSocket[A-Za-z0-9_]*)([$][^[:space:]]+)?|_OBJC_CLASS_[$]_(NSURLSession|NSURLConnection|NSMutableURLRequest|NSURLRequest))[[:space:]]*$'
+for architecture in x86_64 arm64; do
+    controller_smoke_symbols="$controller_check_root/controller-smoke-$architecture.symbols"
+    /usr/bin/nm -u -arch "$architecture" "$controller_smoke_binary" > "$controller_smoke_symbols" || \
+        fail "could not inspect source-built controller imports ($architecture)"
+    if /usr/bin/grep -E -q -- "$controller_forbidden_symbol_pattern" "$controller_smoke_symbols"; then
+        fail "source-built controller imports a forbidden networking API ($architecture)"
+    fi
+done
+
+controller_icon_generator="$controller_check_root/generate-icon"
+controller_icon_output="$controller_check_root/ControllerIcon.icns"
+controller_icon_probe="$controller_check_root/ControllerIcon.iconset"
+(
+    cd "$controller_check_root"
+    /usr/bin/xcrun clang \
+        -fobjc-arc \
+        -Wall -Wextra -Werror \
+        -Wno-deprecated-declarations \
+        -framework AppKit \
+        "$controller_icon" \
+        -o "$controller_icon_generator"
+) || fail "could not link the controller icon generator from source"
+"$controller_icon_generator" "$controller_icon_output" || fail "controller icon generator failed"
+/usr/bin/iconutil -c iconset "$controller_icon_output" -o "$controller_icon_probe" >/dev/null || \
+    fail "source-generated controller icon is not a valid ICNS file"
+[[ -d "$controller_icon_probe" ]] || fail "source-generated controller icon could not be extracted"
 
 source_manifest="$repo_dir/manifests/16.2.39/app-contents.sha256"
 payload_manifest="$repo_dir/manifests/16.2.39/macho-payloads.sha256"
@@ -101,13 +226,13 @@ while IFS= read -r -d '' relative_path; do
         .work/*|build/*|dist/*|artifacts/*|vendor/*|expanded/*|tools/build/*|.codex/*|.agents/*|.claude/*|.cursor/*|.idea/*|.vscode/*|*/.work/*|*/build/*|*/dist/*|*/artifacts/*|*/vendor/*|*/expanded/*|*/.codex/*|*/.agents/*|*/.claude/*|*/.cursor/*|*/.idea/*|*/.vscode/*)
             fail "tracked path is inside a private/generated directory: $relative_path"
             ;;
-        *.pkg|*.dmg|*.zip|*.tar|*.tgz|*.gz|*.bz2|*.xz|*.7z|*.rar|*.spkg|*.metallib|*.car|*.mov|*.xar|*.bom|*.der|*.codedirectory|*.cer|*.crt|*.p12|*.pfx|*.pem|*.key|*.mobileprovision|*.app/*|*/_CodeSignature/*|*/CodeResources)
+        *.pkg|*.dmg|*.zip|*.tar|*.tgz|*.gz|*.bz2|*.xz|*.7z|*.rar|*.spkg|*.metallib|*.car|*.mov|*.icns|*.png|*.xar|*.bom|*.der|*.codedirectory|*.cer|*.crt|*.p12|*.pfx|*.pem|*.key|*.mobileprovision|*.app/*|*/_CodeSignature/*|*/CodeResources)
             fail "tracked proprietary/generated artifact type: $relative_path"
             ;;
     esac
 
     case "$relative_path" in
-        .gitignore|LICENSE|Makefile|*/Makefile|scripts/*|*.md|*.yml|*.yaml|*.plist|*.sha256|*.c)
+        .gitignore|LICENSE|Makefile|*/Makefile|scripts/*|*.md|*.yml|*.yaml|*.plist|*.sha256|*.c|*.h|*.m)
             ;;
         *)
             fail "tracked path is outside the source/document allowlist: $relative_path"
@@ -138,7 +263,7 @@ done < <(git -C "$repo_dir" ls-files -z)
 
 for required_phrase in \
     'not an open-source DisplayLink driver' \
-    'not hardware-qualified yet' \
+    'narrow functional observation, not a general compatibility or stability claim' \
     'Plugable UD-3900PDZ' \
     'distributes no DisplayLink package'; do
     /usr/bin/grep -F -q "$required_phrase" "$repo_dir/README.md" || fail "README is missing required disclosure: $required_phrase"

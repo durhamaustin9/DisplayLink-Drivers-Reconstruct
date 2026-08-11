@@ -33,6 +33,9 @@
 *.metallib
 *.car
 *.mov
+*.icns
+*.png
+*.iconset/
 *.xar
 *.bom
 **/_CodeSignature/
@@ -49,6 +52,10 @@ tools/build/
 .displaylink-local.*/
 .displaylink-core.*/
 .displaylink-source.*/
+.displaylink-controller.*/
+.displaylink-install.*/
+/main.plist
+/path_policy.plist
 
 # Extracted signatures, certificates, and provisioning data
 *.der

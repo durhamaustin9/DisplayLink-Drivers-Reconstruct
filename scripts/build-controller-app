@@ -1,0 +1,110 @@
+#!/bin/zsh
+set -euo pipefail
+
+script_dir=$(cd "$(/usr/bin/dirname "$0")" && /bin/pwd -P)
+repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
+controller_dir="$repo_dir/controller"
+rename_source="$repo_dir/tools/rename-excl.c"
+default_engine="$repo_dir/build/DisplayLink Core.app"
+default_output="$repo_dir/build/DisplayLink Contained.app"
+
+if (( $# > 2 )); then
+    /bin/echo "Usage: $0 [verified-core-app] [output-controller-app]" >&2
+    exit 64
+fi
+
+engine_app="$default_engine"
+output_app="$default_output"
+if (( $# > 0 )); then
+    engine_app=$1
+fi
+if (( $# > 1 )); then
+    output_app=$2
+fi
+
+fail() {
+    /bin/echo "Controller build failed: $1" >&2
+    exit 65
+}
+
+[[ "$output_app" != */ ]] || fail "output path must not end with a slash"
+"$script_dir/verify-core-app" "$engine_app"
+engine_app=$(cd "$engine_app" && /bin/pwd -P)
+[[ ! -e "$output_app" && ! -L "$output_app" ]] || fail "refusing to overwrite existing output: $output_app"
+
+output_parent_input=$(/usr/bin/dirname "$output_app")
+output_parent_planned=${output_parent_input:A}
+[[ "$output_parent_planned/" != "$engine_app/"* ]] || fail "output must not be inside the verified engine app"
+/bin/mkdir -p "$output_parent_input"
+output_parent=$(cd "$output_parent_input" && /bin/pwd -P)
+output_name=$(/usr/bin/basename "$output_app")
+output_app="$output_parent/$output_name"
+[[ ! -e "$output_app" && ! -L "$output_app" ]] || fail "refusing to overwrite existing output: $output_app"
+[[ "$output_parent/" != "$engine_app/"* ]] || fail "output must not be inside the verified engine app"
+
+staging_root=$(/usr/bin/mktemp -d "$output_parent/.displaylink-controller.XXXXXX")
+staging_app="$staging_root/payload.app"
+rename_helper="$staging_root/rename-excl"
+icon_generator="$staging_root/generate-icon"
+
+cleanup() {
+    if [[ -n "${staging_root:-}" && -d "$staging_root" && "$staging_root" == "$output_parent"/.displaylink-controller.* ]]; then
+        /bin/rm -rf -- "$staging_root"
+    fi
+}
+trap cleanup EXIT INT TERM HUP
+
+/usr/bin/xcrun clang -std=c11 -Wall -Wextra -Werror "$rename_source" -o "$rename_helper" || \
+    fail "Xcode Command Line Tools are required to compile the exclusive-rename helper"
+
+/bin/mkdir -p \
+    "$staging_app/Contents/MacOS" \
+    "$staging_app/Contents/Helpers" \
+    "$staging_app/Contents/Resources"
+/bin/cp "$controller_dir/Info.plist" "$staging_app/Contents/Info.plist"
+
+nested_engine="$staging_app/Contents/Helpers/DisplayLink Core Engine.app"
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl "$engine_app" "$nested_engine"
+"$script_dir/verify-core-app" "$nested_engine"
+
+/usr/bin/xcrun clang \
+    -fobjc-arc \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -Wno-deprecated-declarations \
+    -mmacosx-version-min=14.0 \
+    -arch x86_64 \
+    -arch arm64 \
+    -I "$controller_dir" \
+    "$controller_dir/main.m" \
+    "$controller_dir/path_policy.c" \
+    -framework AppKit \
+    -o "$staging_app/Contents/MacOS/DisplayLinkContainedController" || \
+    fail "could not compile the universal controller"
+
+/usr/bin/xcrun clang \
+    -fobjc-arc \
+    -Wall -Wextra -Werror \
+    -Wno-deprecated-declarations \
+    -framework AppKit \
+    "$controller_dir/generate-icon.m" \
+    -o "$icon_generator" || fail "could not compile the icon generator"
+"$icon_generator" "$staging_app/Contents/Resources/ControllerIcon.icns" || \
+    fail "could not render the controller icon"
+
+/usr/bin/codesign \
+    --force \
+    --sign - \
+    --identifier "io.github.durhamaustin9.DisplayLinkContainedController" \
+    --options runtime \
+    --timestamp=none \
+    "$staging_app"
+
+"$script_dir/verify-controller-app" "$staging_app"
+[[ ! -e "$output_app" && ! -L "$output_app" ]] || fail "output appeared while building: $output_app"
+"$rename_helper" "$staging_app" "$output_app" || fail "could not atomically place output"
+[[ ! -e "$staging_app" && -d "$output_app" ]] || fail "could not atomically place output"
+"$script_dir/verify-controller-app" "$output_app"
+
+/bin/echo "Built and verified: $output_app"
+/bin/echo "The controller and nested engine were not launched or installed."

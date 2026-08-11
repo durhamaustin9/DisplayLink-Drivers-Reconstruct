@@ -35,6 +35,54 @@ The dock firmware and packaged vendor firmware resources were not audited. The
 DisplayLink design necessarily transmits display frames over USB to that
 firmware, so the dock remains inside the trusted path.
 
+## Contained controller boundary
+
+The optional `DisplayLink Contained.app` is a Finder-launchable wrapper whose
+Objective-C source is in this repository. It embeds the exact verified,
+single-process Core profile under `Contents/Helpers/DisplayLink Core
+Engine.app`; no generated controller or nested vendor app is distributed here.
+
+The controller intentionally runs without App Sandbox or other entitlements.
+That is necessary for it to enumerate and signal sibling processes during
+shutdown, but it also means macOS does not enforce a no-network boundary on the
+controller. Its smaller assurance is source-level: gates reject reviewed direct
+networking APIs/classes and explicit network/web framework links. This is not an
+exhaustive semantic proof. The nested Core engine retains App Sandbox, USB
+access, Apple's local backlight-service lookup, and no direct client/server
+network entitlements.
+
+Lifecycle control is path-scoped and fail-closed. The controller launches only
+its nested engine, binds the PID to its process start time and canonical path,
+and revalidates that identity immediately before each signal. It never selects
+a termination target by process name or bundle identifier alone. It contains no
+launchd helper and never unloads or mutates a global DisplayLink job. It reports
+shutdown as complete only after read-only checks find no known DisplayLink XPC
+or crash-restart registration and repeated scans prove the bound identity, all
+exact nested processes, and all foreign DisplayLink main/helper processes are
+gone. PID reuse, a path change, uncertain process or registration inspection,
+or a foreign DisplayLink application/helper causes refusal. The owning official
+or Local installation must unregister its own background items; the controller
+does not cross that ownership boundary.
+
+The controller has no separate status item. The nested engine provides the sole
+DisplayLink menu-bar icon, and its normal Quit action initiates the supervised
+shutdown. Automatic login and crash restart are disabled, and the nested Core
+profile contains no XPC helper, crash helper, LaunchAgent, or login item.
+Launching the nested engine directly bypasses this lifecycle boundary.
+
+The controller does not request Screen Recording access. That permission and
+macOS's observation indicator remain associated with the nested proprietary
+engine. Normal cleanup cannot be guaranteed after `SIGKILL`, process-controller
+corruption, a system crash, or power loss. Use exact executable paths when
+investigating an interrupted shutdown; reboot rather than broadly terminating
+ambiguous processes.
+
+The standalone Local engine and the final Core-contained app each completed the
+separate narrow hardware observations described in the README. The final app
+also completed two dock-connected launch/reopen/quit cycles and a fail-closed
+foreign-helper test. These brief results do not qualify other hardware,
+sleep/wake, hotplug, cold boot, simultaneous outputs, or long-duration use.
+
 ## Non-goals
 
 This project does not claim that DisplayLink Manager is spyware, that telemetry
@@ -44,7 +92,8 @@ telemetry collector, pixel-upload endpoint, screenshot writer, analytics SDK,
 or crash uploader, but opaque code prevents exhaustive proof.
 
 The project does not suppress macOS's screen-observation disclosure. Attempting
-to bypass that privacy control is out of scope.
+to bypass that privacy control is out of scope. It also does not claim that the
+controller makes opaque vendor code spyware-free or fully secure.
 
 ## Reporting a vulnerability
 

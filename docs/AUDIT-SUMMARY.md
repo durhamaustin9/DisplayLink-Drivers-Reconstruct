@@ -105,14 +105,46 @@ The XPC service rejected the ad-hoc main process at its vendor Team-ID check.
 That did not prevent the tested display from coming online, but XPC-backed
 controls may not work.
 
+## Contained-controller status
+
+The repository also contains independently written source for a
+Finder-launchable controller. A local build embeds the exact verified,
+single-process Core profile under `Contents/Helpers/DisplayLink Core Engine.app`,
+uses the nested engine's existing item as the sole menu-bar UI, and disables
+automatic login and crash-restart launch. It binds the Core PID to its process
+start time and exact path, and supervises normal Quit until repeated scans prove
+that identity and every exact nested process are gone. It also checks the two
+known DisplayLink helper registrations read-only and refuses completion if a
+foreign DisplayLink main/helper process or registration remains. It never
+unloads a global DisplayLink launchd job or terminates by name or bundle
+identifier alone.
+
+This outer controller is intentionally unsandboxed so it can enumerate and
+signal its sibling process. It has no entitlements; source and build gates reject
+reviewed direct networking APIs/classes and explicit networking/web framework
+links. That is not an enforced no-network sandbox or an exhaustive semantic
+proof. The nested Core process retains App Sandbox, and the nested engine—not
+the controller—still requires Screen Recording permission and causes macOS's
+observation disclosure.
+
+The standalone Local app was used in the original limited hardware observation.
+After the Core identity received Screen Recording authorization, the final
+Contained build completed a second narrow run: one active, non-built-in
+1920×1080 display at 144 Hz, USB identity `17e9:4323`, two clean
+launch/reopen/quit cycles, and zero DisplayLink processes and legacy helper
+labels after each quit. A stale Local registration was also introduced during
+testing; the controller detected it, stopped Core, and refused to report
+success until the foreign state was removed. These are brief functional
+observations, not broad compatibility or long-duration qualification.
+
 ## Core-profile status
 
 The Core profile statically verifies as a single-executable app with only App
-Sandbox, USB, and the local Apple backlight-service exception. Its first hardware
-A/B test was not a successful qualification: macOS treated the new ad-hoc code
-signature as a new Screen Recording identity and had not authorized it. The
-test restored the Local profile. Core remains experimental until a separate
-user grant and hardware test are completed.
+Sandbox, USB, and the local Apple backlight-service exception. Its first A/B
+test was blocked because macOS treated the ad-hoc signature as a new Screen
+Recording identity. A later authorized run completed the narrow hardware and
+lifecycle observations above. Core remains experimental outside that exact
+configuration and untested scenarios.
 
 ## Conclusions
 

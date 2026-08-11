@@ -1,0 +1,177 @@
+#!/bin/zsh
+set -euo pipefail
+
+script_dir=$(cd "$(/usr/bin/dirname "$0")" && /bin/pwd -P)
+repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
+controller_dir="$repo_dir/controller"
+expected_info="$controller_dir/Info.plist"
+controller_main="$controller_dir/main.m"
+controller_policy="$controller_dir/path_policy.c"
+payload_source="$repo_dir/tools/macho-payload.c"
+
+if (( $# != 1 )); then
+    /bin/echo "Usage: $0 controller-app" >&2
+    exit 64
+fi
+
+app=$1
+contents="$app/Contents"
+executable="$contents/MacOS/DisplayLinkContainedController"
+nested_engine="$contents/Helpers/DisplayLink Core Engine.app"
+info_plist="$contents/Info.plist"
+icon="$contents/Resources/ControllerIcon.icns"
+
+fail() {
+    /bin/echo "Controller verification failed: $1" >&2
+    exit 65
+}
+
+for required_source in "$controller_main" "$controller_policy" "$payload_source"; do
+    [[ -f "$required_source" && ! -L "$required_source" ]] || \
+        fail "source-verification input is missing or linked: $required_source"
+done
+
+[[ -d "$contents" && ! -L "$app" ]] || fail "not a regular application bundle: $app"
+[[ -f "$executable" && -x "$executable" && ! -L "$executable" ]] || fail "controller executable is missing, linked, or not executable"
+[[ "$(/usr/bin/stat -f '%Lp' "$executable")" == "755" ]] || fail "unexpected controller executable mode"
+[[ -f "$icon" && ! -L "$icon" ]] || fail "controller icon is missing or linked"
+[[ -d "$nested_engine" && ! -L "$nested_engine" ]] || fail "nested engine is missing or linked"
+
+unsafe_node=$(/usr/bin/find "$contents" ! -type d ! -type f -print -quit)
+[[ -z "$unsafe_node" ]] || fail "non-regular filesystem node: $unsafe_node"
+
+temp_root=$(/usr/bin/mktemp -d /tmp/displaylink-controller-verify.XXXXXX)
+cleanup() {
+    if [[ -n "${temp_root:-}" && -d "$temp_root" && "$temp_root" == /tmp/displaylink-controller-verify.* ]]; then
+        /bin/rm -rf -- "$temp_root"
+    fi
+}
+trap cleanup EXIT INT TERM HUP
+
+expected_executable="$temp_root/DisplayLinkContainedController"
+payload_hasher="$temp_root/macho-payload"
+(
+    cd "$temp_root"
+    /usr/bin/xcrun clang \
+        -fobjc-arc \
+        -std=c11 \
+        -Wall -Wextra -Werror \
+        -Wno-deprecated-declarations \
+        -mmacosx-version-min=14.0 \
+        -arch x86_64 \
+        -arch arm64 \
+        -I "$controller_dir" \
+        "$controller_main" \
+        "$controller_policy" \
+        -framework AppKit \
+        -o "$expected_executable"
+) || fail "could not rebuild the expected universal controller from source"
+[[ "$(/usr/bin/lipo -archs "$expected_executable" 2>/dev/null)" == "x86_64 arm64" ]] || \
+    fail "source-built controller does not contain exactly x86_64 and arm64"
+/usr/bin/codesign \
+    --force \
+    --sign - \
+    --identifier "io.github.durhamaustin9.DisplayLinkContainedController" \
+    --options runtime \
+    --timestamp=none \
+    "$expected_executable" >/dev/null 2>&1 || fail "could not sign the expected source-built controller"
+/usr/bin/xcrun clang -std=c11 -Wall -Wextra -Werror "$payload_source" -o "$payload_hasher" || \
+    fail "could not compile the Mach-O payload verifier"
+
+icon_probe="$temp_root/controller-icon.iconset"
+/usr/bin/iconutil -c iconset "$icon" -o "$icon_probe" >/dev/null || \
+    fail "controller icon is not a valid ICNS file"
+[[ -d "$icon_probe" ]] || fail "controller icon could not be extracted"
+
+actual_outer="$temp_root/actual-outer"
+expected_outer="$temp_root/expected-outer"
+actual_outer_directories="$temp_root/actual-outer-directories"
+expected_outer_directories="$temp_root/expected-outer-directories"
+(
+    cd "$contents"
+    /usr/bin/find . -type f ! -path './Helpers/DisplayLink Core Engine.app/*' -print | \
+        /usr/bin/sed 's|^\./||' | LC_ALL=C /usr/bin/sort > "$actual_outer"
+)
+{
+    /bin/echo 'Info.plist'
+    /bin/echo 'MacOS/DisplayLinkContainedController'
+    /bin/echo 'Resources/ControllerIcon.icns'
+    /bin/echo '_CodeSignature/CodeResources'
+} | LC_ALL=C /usr/bin/sort > "$expected_outer"
+if ! /usr/bin/diff -u "$expected_outer" "$actual_outer"; then
+    fail "outer controller file inventory is unexpected"
+fi
+(
+    cd "$contents"
+    /usr/bin/find . -path './Helpers/DisplayLink Core Engine.app' -prune -o -type d -print | \
+        /usr/bin/sed 's|^\./||' | LC_ALL=C /usr/bin/sort > "$actual_outer_directories"
+)
+{
+    /bin/echo '.'
+    /bin/echo 'Helpers'
+    /bin/echo 'MacOS'
+    /bin/echo 'Resources'
+    /bin/echo '_CodeSignature'
+} | LC_ALL=C /usr/bin/sort > "$expected_outer_directories"
+if ! /usr/bin/diff -u "$expected_outer_directories" "$actual_outer_directories"; then
+    fail "outer controller directory inventory is unexpected"
+fi
+
+expected_info_hash=$(/usr/bin/shasum -a 256 "$expected_info" | /usr/bin/awk '{ print $1 }')
+actual_info_hash=$(/usr/bin/shasum -a 256 "$info_plist" | /usr/bin/awk '{ print $1 }')
+[[ "$actual_info_hash" == "$expected_info_hash" ]] || fail "controller Info.plist differs from the pinned source"
+
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info_plist")" == "io.github.durhamaustin9.DisplayLinkContainedController" ]] || fail "unexpected controller bundle identifier"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$info_plist")" == "DisplayLink Contained" ]] || fail "unexpected controller display name"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_plist")" == "1.0.0" ]] || fail "unexpected controller version"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$info_plist")" == "true" ]] || fail "controller must be an accessory application"
+
+architecture_list=$(/usr/bin/lipo -archs "$executable" 2>/dev/null) || fail "controller is not a universal Mach-O executable"
+[[ "$architecture_list" == "x86_64 arm64" ]] || fail "expected exactly x86_64 and arm64 (found $architecture_list)"
+
+/usr/bin/codesign --verify --strict --all-architectures --verbose=2 "$app"
+for architecture in x86_64 arm64; do
+    metadata="$temp_root/signature-$architecture.txt"
+    entitlements="$temp_root/entitlements-$architecture.plist"
+    undefined_symbols="$temp_root/undefined-symbols-$architecture.txt"
+    actual_thin="$temp_root/actual-controller-$architecture"
+    expected_thin="$temp_root/expected-controller-$architecture"
+
+    /usr/bin/codesign --verify --strict -a "$architecture" --verbose=2 "$executable" || fail "controller signature failed ($architecture)"
+    /usr/bin/codesign -d -vvv -a "$architecture" "$executable" >/dev/null 2>"$metadata" || fail "could not inspect controller signature ($architecture)"
+    /usr/bin/grep -F -x -q 'Identifier=io.github.durhamaustin9.DisplayLinkContainedController' "$metadata" || fail "unexpected controller signing identifier ($architecture)"
+    /usr/bin/grep -F -x -q 'Signature=adhoc' "$metadata" || fail "controller signature is not ad hoc ($architecture)"
+    /usr/bin/grep -F -x -q 'TeamIdentifier=not set' "$metadata" || fail "controller TeamIdentifier is unexpectedly set ($architecture)"
+    /usr/bin/grep -F -q 'flags=0x10002(adhoc,runtime)' "$metadata" || fail "controller hardened-runtime flags are missing ($architecture)"
+
+    /usr/bin/codesign -d -a "$architecture" --entitlements - --xml "$executable" >"$entitlements" 2>/dev/null || true
+    [[ ! -s "$entitlements" ]] || fail "controller must not carry entitlements ($architecture)"
+
+    /usr/bin/lipo "$executable" -thin "$architecture" -output "$actual_thin" || \
+        fail "could not extract installed controller architecture ($architecture)"
+    /usr/bin/lipo "$expected_executable" -thin "$architecture" -output "$expected_thin" || \
+        fail "could not extract source-built controller architecture ($architecture)"
+    actual_payload_hash=$("$payload_hasher" "$actual_thin" | /usr/bin/shasum -a 256 | /usr/bin/awk '{ print $1 }') || \
+        fail "could not hash installed controller payload ($architecture)"
+    expected_payload_hash=$("$payload_hasher" "$expected_thin" | /usr/bin/shasum -a 256 | /usr/bin/awk '{ print $1 }') || \
+        fail "could not hash source-built controller payload ($architecture)"
+    [[ "$actual_payload_hash" == "$expected_payload_hash" ]] || \
+        fail "controller payload does not match the reviewed source ($architecture)"
+
+    /usr/bin/nm -u -arch "$architecture" "$executable" > "$undefined_symbols" || \
+        fail "could not inspect controller imports ($architecture)"
+    if /usr/bin/grep -E -q \
+        '^[[:space:]]*(_(socket|connect|connectx|bind|listen|accept|accept4|send|sendto|sendmsg|recv|recvfrom|recvmsg|getaddrinfo|getnameinfo|gethostbyname|gethostbyaddr|CFStreamCreatePairWithSocket|CFStreamCreatePairWithSocketToHost|CFSocket[A-Za-z0-9_]*)([$][^[:space:]]+)?|_OBJC_CLASS_[$]_(NSURLSession|NSURLConnection|NSMutableURLRequest|NSURLRequest))[[:space:]]*$' \
+        "$undefined_symbols"; then
+        fail "controller imports a forbidden networking API ($architecture)"
+    fi
+done
+
+linked_libraries=$(/usr/bin/otool -L "$executable")
+if /bin/echo "$linked_libraries" | /usr/bin/grep -E -q 'Network\.framework|SystemConfiguration\.framework|CFNetwork\.framework|WebKit\.framework'; then
+    fail "controller links a networking or web framework"
+fi
+
+"$script_dir/verify-core-app" "$nested_engine"
+
+/bin/echo "Verified the universal contained controller against reviewed source and its exact single-process Core engine."
