@@ -26,6 +26,10 @@ software capture. A trace from another operating system is not automatically a
 macOS fact, so record the host and driver exactly and later validate important
 findings against a hardware trace from the Mac.
 
+> **Operating-system boundary:** `modprobe`, `lsusb`, `usbmon`, and Linux
+> `usbmonN` capture interfaces do not exist on macOS. Run every command in the
+> Linux section on a separate Linux computer, not in Terminal on the Mac.
+
 Use a dedicated test account and disconnect unrelated USB devices where
 practical. Connect exactly one monitor to **HDMI 2 or HDMI 3** and record which
 port. HDMI 1 is the native DisplayPort Alt Mode path and will not expose the

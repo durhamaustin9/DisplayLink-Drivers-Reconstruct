@@ -45,6 +45,8 @@ Captured payloads, firmware, keys, serial numbers, and screen contents must not
 be committed. Read [PROVENANCE.md](PROVENANCE.md) before adding an observation.
 Follow [COLLECTION-GUIDE.md](COLLECTION-GUIDE.md) for the controlled experiment
 matrix, safe capture options, private storage location, and notes template.
+Sanitized, reproduced facts are kept under [`observations/`](observations/);
+the current Mac observation records revision `3156` and seven interfaces.
 
 Run all hardware-independent classification and parser tests with:
 
