@@ -42,6 +42,13 @@ transfer order, direction, transfer type, endpoint, and length, but rejects a
 payload field. Private raw research material should live outside this Git
 checkout and must never be used as a source-code template.
 
+The activation-envelope format adds capture-relative timestamps and four
+experiment markers but preserves the same boundary: no payload, control setup
+packet, semantic command label, key, or screen data. Completed `.dba` files are
+ignored private artifacts. A synthetic envelope tests the parser; a black-box
+envelope is evidence only for its recorded metadata and becomes a public fact
+only after the repeat/review criteria in `ACTIVATION-ENVELOPE.md` are met.
+
 ## Implementation rule
 
 Write new code from a reviewed behavioral specification and USB standards.

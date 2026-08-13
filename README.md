@@ -46,12 +46,19 @@ make probe
 make -C clean-room checker
 make descriptors
 make fake-lab
+make activation-check
 ```
 
 `make fake-lab` is hardware-independent. Its executable links no IOKit or
 IOUSBHost framework and cannot open the dock. It validates the exact observed
 identity/topology, then deliberately refuses activation because no independently
 documented message exists yet.
+
+`make activation-check` builds a separate metadata-only activation-envelope
+parser and fake replay. The replay turns transfer lengths into zero-filled
+synthetic packets; it never consumes or stores captured payload bytes. No real
+activation exchange is claimed yet because no external capture has been
+provided. See the [activation envelope specification](clean-room/ACTIVATION-ENVELOPE.md).
 
 After quitting DockBridge completely, `make read-descriptors` performs an
 explicitly opted-in USB-standard configuration-descriptor read against only
@@ -138,9 +145,10 @@ Apple references:
 The next stages are gated deliberately:
 
 1. preserve public USB descriptors for this exact hardware without identifiers;
-2. document legally obtained, independently observed protocol facts for Ella;
-3. extend the implemented bounded fake transport/state skeleton with documented
-   parsers, corpus tests, and fuzz targets;
+2. collect three legally obtained black-box activation trials and validate their
+   metadata with the implemented activation-envelope parser;
+3. turn only stable, reviewed Ella facts into bounded parsers, corpus tests, and
+   fuzz targets on the implemented fake transport/state skeleton;
 4. prove cold/warm activation and mode selection without copying firmware,
    executable code, keys, or vendor resources;
 5. implement damage encoding and USB transport behind an exact device allowlist;

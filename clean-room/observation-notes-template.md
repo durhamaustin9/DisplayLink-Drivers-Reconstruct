@@ -13,6 +13,9 @@ Do not commit this completed form. Store it under `observations-private/`.
 - Capture tool and version:
 - Raw capture filename:
 - Raw capture SHA-256:
+- Activation envelope filename (if created):
+- Activation envelope SHA-256:
+- Envelope independently checked against raw capture by:
 - Independent repeat number:
 
 ## Host
@@ -75,3 +78,4 @@ Use capture-relative time when available.
 - No serial number intentionally recorded: yes/no
 - Raw capture kept outside Git: yes/no
 - Anomalies or uncertainty:
+- Submission/completion pairing method and uncertainty:

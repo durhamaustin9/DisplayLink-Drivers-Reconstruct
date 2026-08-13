@@ -79,6 +79,24 @@ make -C clean-room checker
 ./clean-room/build/transcript-check /path/to/private-observation.dbobs
 ```
 
+The next evidence layer is the stricter activation-envelope parser. It records
+capture-relative markers around exactly one cold-connect or warm-start action,
+then accepts only control endpoint-zero metadata and bulk `0x02`/`0x84`
+metadata. It contains no payload field or semantic command labels. Build it
+with:
+
+```sh
+make activation-check
+./clean-room/build/activation-check /path/to/private-activation.dba
+./clean-room/build/activation-check --replay-fake \
+  /path/to/private-activation.dba
+```
+
+Fake replay uses only zero-filled synthetic chunks in the memory transport;
+control transfers are not replayed. Read
+[`ACTIVATION-ENVELOPE.md`](ACTIVATION-ENVELOPE.md) for the grammar, bounds, and
+criteria for turning three private observations into a reviewed public fact.
+
 The version-one text format is:
 
 ```text

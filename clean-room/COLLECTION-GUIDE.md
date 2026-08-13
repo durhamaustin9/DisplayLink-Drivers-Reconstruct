@@ -144,6 +144,22 @@ It intentionally does not convert packet captures yet. A converter will be
 implemented against the first reviewed capture so its request pairing and
 endpoint semantics are based on observed data rather than guesses.
 
+For a manually reviewed activation trial, transcribe only the permitted event
+metadata into `observations-private/<session>/activation.dba` using
+[`ACTIVATION-ENVELOPE.md`](ACTIVATION-ENVELOPE.md). Capture-relative action and
+visible-stability timestamps must come from the session log; do not infer them
+from packet contents. Validate and exercise the shape in memory with:
+
+```sh
+make activation-check
+./clean-room/build/activation-check --replay-fake \
+  observations-private/session-B/activation.dba
+```
+
+The fake replay deliberately uses zero-filled synthetic packets and skips
+control transfers. Passing it is a bounds/ordering test, not evidence that the
+dock would accept those bytes.
+
 ## Evidence quality
 
 A useful protocol fact identifies its source trial and uncertainty. For

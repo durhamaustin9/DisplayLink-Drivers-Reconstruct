@@ -17,6 +17,14 @@ state-machine source has no call to the transport write API. Publication checks
 compile and run the lab, require zero attempted writes, and inspect linked
 libraries and undefined symbols for hardware-access and networking imports.
 
+The activation-envelope parser accepts only exact-device metadata, monotonic
+timestamps, ordered experiment markers, endpoint-zero control metadata, and
+bulk endpoint `0x02`/`0x84` lengths. It rejects payload fields, undocumented
+endpoint types, and incomplete experiments. Its optional replay uses zero-filled
+synthetic data exclusively inside the fake transport; it does not replay
+endpoint-zero requests. A successful fake replay establishes parser and queue
+bounds only, not hardware protocol correctness.
+
 The repository also retains a historical local containment/audit toolkit. That
 toolkit does not replace or make the proprietary DisplayLink rendering
 executable auditable. Its primary control was macOS App Sandbox enforcement

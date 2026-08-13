@@ -171,11 +171,17 @@ for clean_room_source in \
     "$clean_room_dir/state_machine.c" \
     "$clean_room_dir/state_machine.h" \
     "$clean_room_dir/fake_dock_lab.c" \
+    "$clean_room_dir/activation_model.c" \
+    "$clean_room_dir/activation_model.h" \
+    "$clean_room_dir/activation_replay.c" \
+    "$clean_room_dir/activation_replay.h" \
+    "$clean_room_dir/activation_check.c" \
     "$clean_room_dir/tests/probe_model_tests.c" \
     "$clean_room_dir/tests/descriptor_model_tests.c" \
     "$clean_room_dir/tests/observation_model_tests.c" \
     "$clean_room_dir/tests/fake_transport_tests.c" \
-    "$clean_room_dir/tests/state_machine_tests.c"; do
+    "$clean_room_dir/tests/state_machine_tests.c" \
+    "$clean_room_dir/tests/activation_model_tests.c"; do
     [[ -f "$clean_room_source" && ! -L "$clean_room_source" ]] || \
         fail "clean-room source is missing or linked: ${clean_room_source#"$repo_dir/"}"
 done
@@ -189,7 +195,10 @@ if /usr/bin/grep -E -n -q -- "$clean_room_network_pattern" \
     "$clean_room_dir/transport.c" "$clean_room_dir/transport.h" \
     "$clean_room_dir/fake_transport.c" "$clean_room_dir/fake_transport.h" \
     "$clean_room_dir/state_machine.c" "$clean_room_dir/state_machine.h" \
-    "$clean_room_dir/fake_dock_lab.c"; then
+    "$clean_room_dir/fake_dock_lab.c" \
+    "$clean_room_dir/activation_model.c" "$clean_room_dir/activation_model.h" \
+    "$clean_room_dir/activation_replay.c" "$clean_room_dir/activation_replay.h" \
+    "$clean_room_dir/activation_check.c"; then
     fail "clean-room probe calls a forbidden networking API"
 fi
 if /usr/bin/grep -E -n -q -- 'kUSBSerialNumberString|USB Serial Number|serialNumber|IOPlatformSerialNumber' \
@@ -304,6 +313,11 @@ fake_lab_sources=(
     "$clean_room_dir/state_machine.c"
     "$clean_room_dir/state_machine.h"
     "$clean_room_dir/fake_dock_lab.c"
+    "$clean_room_dir/activation_model.c"
+    "$clean_room_dir/activation_model.h"
+    "$clean_room_dir/activation_replay.c"
+    "$clean_room_dir/activation_replay.h"
+    "$clean_room_dir/activation_check.c"
 )
 fake_hardware_api_pattern='IOUSBHost|IOKit/IOKitLib|IOService(Get|Open|Close|Matching)|IORegistryEntry|configureWithValue:|resetWithError:|sendDeviceRequest:|enqueueDeviceRequest:'
 if /usr/bin/grep -E -n -q -- "$fake_hardware_api_pattern" "${fake_lab_sources[@]}"; then
@@ -365,6 +379,50 @@ fake_lab_symbols="$controller_check_root/fake-lab.symbols"
 if /usr/bin/grep -E -q -- '_(IOUSB|IOService|IORegistry|socket|connect|send|recv)' \
     "$fake_lab_symbols"; then
     fail "fake transport lab imports a hardware-access or networking symbol"
+fi
+
+clean_room_activation_test="$controller_check_root/clean-room-activation-tests"
+/usr/bin/xcrun clang \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -I "$clean_room_dir" \
+    "$clean_room_dir/tests/activation_model_tests.c" \
+    "$clean_room_dir/activation_model.c" \
+    "$clean_room_dir/activation_replay.c" \
+    "$clean_room_dir/state_machine.c" \
+    "$clean_room_dir/fake_transport.c" \
+    "$clean_room_dir/transport.c" \
+    "$clean_room_dir/observation_model.c" \
+    "$clean_room_dir/probe_model.c" \
+    -o "$clean_room_activation_test" || \
+    fail "could not compile activation-envelope tests"
+"$clean_room_activation_test" || fail "activation-envelope tests failed"
+
+clean_room_activation_checker="$controller_check_root/clean-room-activation-check"
+/usr/bin/xcrun clang \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -I "$clean_room_dir" \
+    "$clean_room_dir/activation_check.c" \
+    "$clean_room_dir/activation_model.c" \
+    "$clean_room_dir/activation_replay.c" \
+    "$clean_room_dir/state_machine.c" \
+    "$clean_room_dir/fake_transport.c" \
+    "$clean_room_dir/transport.c" \
+    "$clean_room_dir/observation_model.c" \
+    "$clean_room_dir/probe_model.c" \
+    -o "$clean_room_activation_checker" || \
+    fail "could not link activation-envelope checker"
+if /usr/bin/otool -L "$clean_room_activation_checker" | \
+    /usr/bin/grep -E -q -- 'IOKit|IOUSBHost'; then
+    fail "activation-envelope checker links a real macOS USB or IOKit framework"
+fi
+activation_symbols="$controller_check_root/activation-check.symbols"
+/usr/bin/nm -u "$clean_room_activation_checker" > "$activation_symbols" || \
+    fail "could not inspect activation-envelope checker imports"
+if /usr/bin/grep -E -q -- '_(IOUSB|IOService|IORegistry|socket|connect|send|recv)' \
+    "$activation_symbols"; then
+    fail "activation-envelope checker imports hardware-access or networking symbols"
 fi
 
 source_manifest="$repo_dir/manifests/16.2.39/app-contents.sha256"
@@ -456,7 +514,7 @@ while IFS= read -r -d '' relative_path; do
         .work/*|build/*|dist/*|artifacts/*|vendor/*|expanded/*|captures/*|observations-private/*|tools/build/*|.codex/*|.agents/*|.claude/*|.cursor/*|.idea/*|.vscode/*|*/.work/*|*/build/*|*/dist/*|*/artifacts/*|*/vendor/*|*/expanded/*|*/captures/*|*/observations-private/*|*/.codex/*|*/.agents/*|*/.claude/*|*/.cursor/*|*/.idea/*|*/.vscode/*)
             fail "tracked path is inside a private/generated directory: $relative_path"
             ;;
-        *.pkg|*.dmg|*.zip|*.tar|*.tgz|*.gz|*.bz2|*.xz|*.7z|*.rar|*.spkg|*.metallib|*.car|*.mov|*.icns|*.png|*.xar|*.bom|*.der|*.codedirectory|*.cer|*.crt|*.p12|*.pfx|*.pem|*.key|*.mobileprovision|*.dbobs|*.app/*|*/_CodeSignature/*|*/CodeResources)
+        *.pkg|*.dmg|*.zip|*.tar|*.tgz|*.gz|*.bz2|*.xz|*.7z|*.rar|*.spkg|*.metallib|*.car|*.mov|*.icns|*.png|*.xar|*.bom|*.der|*.codedirectory|*.cer|*.crt|*.p12|*.pfx|*.pem|*.key|*.mobileprovision|*.dbobs|*.dba|*.app/*|*/_CodeSignature/*|*/CodeResources)
             fail "tracked proprietary/generated artifact type: $relative_path"
             ;;
     esac

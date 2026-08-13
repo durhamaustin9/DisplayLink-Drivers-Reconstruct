@@ -9,6 +9,14 @@ metadata-only observation parser, and an in-memory fake transport with a
 protocol-gated device state machine in `clean-room/`. The parser is protocol
 agnostic and carries no captured vendor payload.
 
+An activation-envelope parser is also implemented. It can represent an
+externally observed cold-connect or warm-start interval using monotonic event
+timestamps plus control/bulk direction, endpoint, and length metadata. It
+rejects payload fields and semantic command labels. Its fake replay constructs
+only zero-filled chunks; endpoint-zero control records remain unreplayed. No
+real activation exchange has been provided yet, so the implementation is an
+evidence-processing skeleton rather than an activation protocol.
+
 ## Verified starting point
 
 The attached Plugable UD-3900PDZ exposes USB `17e9:4323`. Public IOKit registry
