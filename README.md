@@ -5,8 +5,9 @@ UD-3900PDZ** dock, plus a retained audit of DisplayLink Manager 16.2.39.
 
 > [!IMPORTANT]
 > The independent code in `clean-room/` is not yet a display driver. It is a
-> read-only hardware probe plus an offline, metadata-only observation parser.
-> Neither loads DisplayLink software nor sends protocol bytes to the dock. This
+> read-only hardware probe, an offline metadata parser, and an in-memory fake
+> transport/state machine. None loads DisplayLink software or sends protocol
+> bytes to the dock. This
 > repository is not an open-source DisplayLink driver and is not yet a
 > functional independent USB-display driver. It distributes no DisplayLink
 > package and does not currently drive the dock's USB-graphics HDMI 2/3 outputs.
@@ -29,7 +30,10 @@ The first independent milestone is implemented and tested:
 - uses no DisplayLink executable, library, firmware, resource, or protocol code;
 - validates a bounded, metadata-only observation format offline; and
 - rejects raw payload fields, oversized transfers, out-of-order records, and
-  non-allowlisted USB devices.
+  non-allowlisted USB devices;
+- models `0x02`/`0x84` with bounded, in-memory packet queues; and
+- stops its device state machine at a protocol-undocumented gate with zero
+  attempted writes.
 
 Build and run it with the dock attached:
 
@@ -41,7 +45,13 @@ make probe
 ./clean-room/build/dock-probe
 make -C clean-room checker
 make descriptors
+make fake-lab
 ```
+
+`make fake-lab` is hardware-independent. Its executable links no IOKit or
+IOUSBHost framework and cannot open the dock. It validates the exact observed
+identity/topology, then deliberately refuses activation because no independently
+documented message exists yet.
 
 After quitting DockBridge completely, `make read-descriptors` performs an
 explicitly opted-in USB-standard configuration-descriptor read against only
@@ -129,7 +139,8 @@ The next stages are gated deliberately:
 
 1. preserve public USB descriptors for this exact hardware without identifiers;
 2. document legally obtained, independently observed protocol facts for Ella;
-3. build bounded parsers, a fake dock, corpus tests, and fuzz targets;
+3. extend the implemented bounded fake transport/state skeleton with documented
+   parsers, corpus tests, and fuzz targets;
 4. prove cold/warm activation and mode selection without copying firmware,
    executable code, keys, or vendor resources;
 5. implement damage encoding and USB transport behind an exact device allowlist;
@@ -199,6 +210,11 @@ The clean-room probe:
 - does not request Screen Recording, Accessibility, or administrator access;
 - does not capture frames or create a virtual display; and
 - records no serial number, monitor EDID serial, screen content, or local path.
+
+The fake transport is even narrower: it is a bounded memory queue with no
+device-access framework dependency. The repository gate builds and runs it,
+checks its imported symbols and linked libraries, and rejects any transport
+write call from the protocol-gated state machine.
 
 These properties apply to the probe, not to a future functional driver. A future
 userspace driver must necessarily receive frames if it drives HDMI 2/3, and the

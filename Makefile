@@ -7,13 +7,14 @@ CORE_APP ?= $(CURDIR)/build/DockBridge Engine.app
 CONTROLLER_APP ?= $(CURDIR)/build/DockBridge.app
 INSTALLED_CONTROLLER_APP ?= /Applications/DockBridge.app
 
-.PHONY: help test probe descriptors read-descriptors test-clean-room prepare local core controller verify verify-local verify-core verify-controller verify-installed integration-local integration-core integration-contained install-contained open-contained tools
+.PHONY: help test probe descriptors read-descriptors fake-lab test-clean-room prepare local core controller verify verify-local verify-core verify-controller verify-installed integration-local integration-core integration-contained install-contained open-contained tools
 
 help:
 	@echo "Independent, read-only hardware work (no DisplayLink software):"
 	@echo "  make probe"
 	@echo "  make descriptors       # build the opt-in standard descriptor reader"
 	@echo "  make read-descriptors  # run it; DockBridge must be completely quit"
+	@echo "  make fake-lab          # run the in-memory zero-write state machine"
 	@echo "  make test-clean-room"
 	@echo
 	@echo "Source-only checks:"
@@ -45,6 +46,10 @@ descriptors:
 
 read-descriptors: descriptors
 	./clean-room/build/standard-descriptor-reader --read-standard-descriptors
+
+fake-lab:
+	$(MAKE) -C clean-room fake-lab
+	./clean-room/build/fake-dock-lab
 
 test-clean-room:
 	$(MAKE) -C clean-room test

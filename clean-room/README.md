@@ -10,6 +10,26 @@ public interface descriptors. It never opens or claims an interface and never
 sends a USB control, bulk, interrupt, or isochronous transfer. It also avoids
 reading or printing the dock serial number.
 
+The repository also contains a hardware-independent fake transport and device
+state-machine skeleton. It models only the standard facts observed for this
+exact revision: bulk OUT `0x02`, bulk IN `0x84`, 1024-byte packets, one packet
+per burst, and no streams. Its queues are bounded and live only in memory. It
+does not link IOKit or IOUSBHost, enumerate a device, or contain a real-hardware
+transport kind.
+
+Run the simulator with:
+
+```sh
+make fake-lab
+```
+
+The simulated state sequence is `offline` → `attached` →
+`topology-verified` → `blocked-protocol-undocumented`. The activation request
+is an intentional hard barrier: the state machine has no call to the transport
+write function, and its test requires both attempted and successful write
+counters to remain zero. Synthetic inbound packets can be injected into the
+fake dock for future parser tests, but no protocol payload has been invented.
+
 An additional **opt-in** tool reads the standard USB configuration descriptor
 to report endpoint addresses and packet sizes. It allows only `17e9:4323`,
 refuses to run while candidate interfaces or the device are owned, and opens
@@ -79,7 +99,8 @@ matrix, safe capture options, private storage location, and notes template.
 Sanitized, reproduced facts are kept under [`observations/`](observations/);
 the current Mac observation records revision `3156` and seven interfaces.
 
-Run all hardware-independent classification and parser tests with:
+Run all hardware-independent classification, parser, transport, and
+state-machine tests with:
 
 ```sh
 make -C clean-room test
@@ -91,8 +112,9 @@ mode-setting, or compressed-frame protocol. Consequently this probe does not
 light a DisplayLink-connected monitor and is not a replacement display driver.
 
 The next safe research gate is an independently documented protocol transcript
-for this exact DL-3900/Ella device, followed by parsers and a simulator that can
-be fuzzed before any code is allowed to send bytes to real hardware. A macOS
+for this exact DL-3900/Ella device. Its records can then be implemented as
+bounded parsers and exercised through the existing fake transport before any
+code is allowed to send bytes to real hardware. A macOS
 implementation would still need a supported way to publish a desktop display
 and receive its pixels; current public DriverKit families do not provide a
 third-party host display family.

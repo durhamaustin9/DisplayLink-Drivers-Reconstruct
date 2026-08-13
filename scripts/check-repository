@@ -164,9 +164,18 @@ for clean_room_source in \
     "$clean_room_dir/observation_model.c" \
     "$clean_room_dir/observation_model.h" \
     "$clean_room_dir/transcript_check.c" \
+    "$clean_room_dir/transport.c" \
+    "$clean_room_dir/transport.h" \
+    "$clean_room_dir/fake_transport.c" \
+    "$clean_room_dir/fake_transport.h" \
+    "$clean_room_dir/state_machine.c" \
+    "$clean_room_dir/state_machine.h" \
+    "$clean_room_dir/fake_dock_lab.c" \
     "$clean_room_dir/tests/probe_model_tests.c" \
     "$clean_room_dir/tests/descriptor_model_tests.c" \
-    "$clean_room_dir/tests/observation_model_tests.c"; do
+    "$clean_room_dir/tests/observation_model_tests.c" \
+    "$clean_room_dir/tests/fake_transport_tests.c" \
+    "$clean_room_dir/tests/state_machine_tests.c"; do
     [[ -f "$clean_room_source" && ! -L "$clean_room_source" ]] || \
         fail "clean-room source is missing or linked: ${clean_room_source#"$repo_dir/"}"
 done
@@ -176,7 +185,11 @@ if /usr/bin/grep -E -n -q -- "$clean_room_network_pattern" \
     "$clean_room_dir/probe_model.h" "$clean_room_dir/descriptor_model.c" \
     "$clean_room_dir/descriptor_model.h" "$clean_room_dir/standard_descriptor_reader.m" \
     "$clean_room_dir/observation_model.c" \
-    "$clean_room_dir/observation_model.h" "$clean_room_dir/transcript_check.c"; then
+    "$clean_room_dir/observation_model.h" "$clean_room_dir/transcript_check.c" \
+    "$clean_room_dir/transport.c" "$clean_room_dir/transport.h" \
+    "$clean_room_dir/fake_transport.c" "$clean_room_dir/fake_transport.h" \
+    "$clean_room_dir/state_machine.c" "$clean_room_dir/state_machine.h" \
+    "$clean_room_dir/fake_dock_lab.c"; then
     fail "clean-room probe calls a forbidden networking API"
 fi
 if /usr/bin/grep -E -n -q -- 'kUSBSerialNumberString|USB Serial Number|serialNumber|IOPlatformSerialNumber' \
@@ -282,6 +295,77 @@ clean_room_transcript_binary="$controller_check_root/clean-room-transcript-check
     "$clean_room_dir/observation_model.c" \
     "$clean_room_dir/probe_model.c" \
     -o "$clean_room_transcript_binary" || fail "could not link clean-room transcript checker"
+
+fake_lab_sources=(
+    "$clean_room_dir/transport.c"
+    "$clean_room_dir/transport.h"
+    "$clean_room_dir/fake_transport.c"
+    "$clean_room_dir/fake_transport.h"
+    "$clean_room_dir/state_machine.c"
+    "$clean_room_dir/state_machine.h"
+    "$clean_room_dir/fake_dock_lab.c"
+)
+fake_hardware_api_pattern='IOUSBHost|IOKit/IOKitLib|IOService(Get|Open|Close|Matching)|IORegistryEntry|configureWithValue:|resetWithError:|sendDeviceRequest:|enqueueDeviceRequest:'
+if /usr/bin/grep -E -n -q -- "$fake_hardware_api_pattern" "${fake_lab_sources[@]}"; then
+    fail "fake transport lab references a real macOS USB or IOKit access API"
+fi
+if /usr/bin/grep -E -n -q -- 'db_transport_write[[:space:]]*\(' \
+    "$clean_room_dir/state_machine.c"; then
+    fail "protocol-gated state machine can call the transport write API"
+fi
+
+clean_room_fake_transport_test="$controller_check_root/clean-room-fake-transport-tests"
+/usr/bin/xcrun clang \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -I "$clean_room_dir" \
+    "$clean_room_dir/tests/fake_transport_tests.c" \
+    "$clean_room_dir/fake_transport.c" \
+    "$clean_room_dir/transport.c" \
+    -o "$clean_room_fake_transport_test" || \
+    fail "could not compile fake transport tests"
+"$clean_room_fake_transport_test" || fail "fake transport tests failed"
+
+clean_room_state_machine_test="$controller_check_root/clean-room-state-machine-tests"
+/usr/bin/xcrun clang \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -I "$clean_room_dir" \
+    "$clean_room_dir/tests/state_machine_tests.c" \
+    "$clean_room_dir/state_machine.c" \
+    "$clean_room_dir/fake_transport.c" \
+    "$clean_room_dir/transport.c" \
+    -o "$clean_room_state_machine_test" || \
+    fail "could not compile state-machine tests"
+"$clean_room_state_machine_test" || fail "state-machine tests failed"
+
+clean_room_fake_lab="$controller_check_root/clean-room-fake-dock-lab"
+/usr/bin/xcrun clang \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -I "$clean_room_dir" \
+    "$clean_room_dir/fake_dock_lab.c" \
+    "$clean_room_dir/state_machine.c" \
+    "$clean_room_dir/fake_transport.c" \
+    "$clean_room_dir/transport.c" \
+    -o "$clean_room_fake_lab" || fail "could not link fake transport lab"
+fake_lab_output="$controller_check_root/fake-lab-output.txt"
+"$clean_room_fake_lab" > "$fake_lab_output" || fail "fake transport lab failed"
+/usr/bin/grep -F -q 'write-attempts=0 successful-writes=0' "$fake_lab_output" || \
+    fail "fake transport lab did not prove zero writes"
+/usr/bin/grep -F -q 'PASS: activation is blocked' "$fake_lab_output" || \
+    fail "fake transport lab did not stop at its protocol gate"
+if /usr/bin/otool -L "$clean_room_fake_lab" | /usr/bin/grep -E -q -- \
+    'IOKit|IOUSBHost'; then
+    fail "fake transport lab links a real macOS USB or IOKit framework"
+fi
+fake_lab_symbols="$controller_check_root/fake-lab.symbols"
+/usr/bin/nm -u "$clean_room_fake_lab" > "$fake_lab_symbols" || \
+    fail "could not inspect fake transport lab imports"
+if /usr/bin/grep -E -q -- '_(IOUSB|IOService|IORegistry|socket|connect|send|recv)' \
+    "$fake_lab_symbols"; then
+    fail "fake transport lab imports a hardware-access or networking symbol"
+fi
 
 source_manifest="$repo_dir/manifests/16.2.39/app-contents.sha256"
 payload_manifest="$repo_dir/manifests/16.2.39/macho-payloads.sha256"

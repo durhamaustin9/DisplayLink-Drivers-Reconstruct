@@ -4,8 +4,9 @@ Status reviewed: 2026-08-13
 
 This is a proposed architecture, not a finished driver and not a claim that a
 formal two-team clean-room process has already occurred. The only implemented
-independent components are the read-only descriptor probe and the bounded,
-metadata-only observation parser in `clean-room/`. The parser is protocol
+independent components are the read-only descriptor probe, the bounded
+metadata-only observation parser, and an in-memory fake transport with a
+protocol-gated device state machine in `clean-room/`. The parser is protocol
 agnostic and carries no captured vendor payload.
 
 ## Verified starting point
@@ -25,6 +26,15 @@ This topology is not enough to send pixels. The Ella activation, control,
 head/EDID, mode-setting, frame-record, compression, and recovery protocols need
 independent documentation for this exact hardware revision.
 
+The implemented fake transport models the two endpoint directions with
+eight-entry, 1024-byte bounded queues. The current state machine accepts only
+the exact observed VID, PID, revision, interface classes, endpoints, packet
+sizes, burst counts, and stream counts. It exposes no real transport type and
+stops activation at `blocked-protocol-undocumented`. The state-machine source
+does not call its transport write API; tests and the publication gate require
+zero write attempts. This supplies a safe seam for future parsers without
+asserting any undocumented message meaning.
+
 ## Proposed trust boundaries
 
 1. A minimal ScreenCaptureKit producer receives frames and damage metadata and
@@ -36,8 +46,9 @@ independent documentation for this exact hardware revision.
    length, endpoint, display index, mode, and response.
 4. Network access, analytics, updater, login item, crash uploader, user-file
    permission, remote control, and dynamic code loading are absent.
-5. Parsers and codec logic are tested first against a fake dock and fuzzed
-   corpora. Real-hardware writes are disabled until those gates pass.
+5. Parsers and codec logic are tested first against the implemented fake dock
+   and fuzzed corpora. Real-hardware writes remain absent until those gates
+   pass and the applicable protocol facts are documented.
 
 ## macOS platform boundary
 

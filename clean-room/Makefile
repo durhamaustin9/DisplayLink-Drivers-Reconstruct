@@ -4,11 +4,14 @@ BUILD_DIR := build
 PROBE := $(BUILD_DIR)/dock-probe
 CHECKER := $(BUILD_DIR)/transcript-check
 DESCRIPTOR_READER := $(BUILD_DIR)/standard-descriptor-reader
+FAKE_LAB := $(BUILD_DIR)/fake-dock-lab
 PROBE_TEST := $(BUILD_DIR)/probe-model-tests
 OBSERVATION_TEST := $(BUILD_DIR)/observation-model-tests
 DESCRIPTOR_TEST := $(BUILD_DIR)/descriptor-model-tests
+FAKE_TRANSPORT_TEST := $(BUILD_DIR)/fake-transport-tests
+STATE_MACHINE_TEST := $(BUILD_DIR)/state-machine-tests
 
-.PHONY: all probe checker descriptors test clean
+.PHONY: all probe checker descriptors fake-lab test clean
 
 all: probe checker
 
@@ -30,6 +33,11 @@ descriptors: $(DESCRIPTOR_READER)
 $(DESCRIPTOR_READER): standard_descriptor_reader.m descriptor_model.c descriptor_model.h probe_model.c probe_model.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -fobjc-arc standard_descriptor_reader.m descriptor_model.c probe_model.c -framework IOUSBHost -framework IOKit -framework Foundation -o "$@"
 
+fake-lab: $(FAKE_LAB)
+
+$(FAKE_LAB): fake_dock_lab.c state_machine.c state_machine.h fake_transport.c fake_transport.h transport.c transport.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) fake_dock_lab.c state_machine.c fake_transport.c transport.c -o "$@"
+
 $(PROBE_TEST): tests/probe_model_tests.c probe_model.c probe_model.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) tests/probe_model_tests.c probe_model.c -o "$@"
 
@@ -39,10 +47,18 @@ $(OBSERVATION_TEST): tests/observation_model_tests.c observation_model.c observa
 $(DESCRIPTOR_TEST): tests/descriptor_model_tests.c descriptor_model.c descriptor_model.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) tests/descriptor_model_tests.c descriptor_model.c -framework IOUSBHost -o "$@"
 
-test: $(PROBE_TEST) $(OBSERVATION_TEST) $(DESCRIPTOR_TEST)
+$(FAKE_TRANSPORT_TEST): tests/fake_transport_tests.c fake_transport.c fake_transport.h transport.c transport.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) tests/fake_transport_tests.c fake_transport.c transport.c -o "$@"
+
+$(STATE_MACHINE_TEST): tests/state_machine_tests.c state_machine.c state_machine.h fake_transport.c fake_transport.h transport.c transport.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) tests/state_machine_tests.c state_machine.c fake_transport.c transport.c -o "$@"
+
+test: $(PROBE_TEST) $(OBSERVATION_TEST) $(DESCRIPTOR_TEST) $(FAKE_TRANSPORT_TEST) $(STATE_MACHINE_TEST)
 	"$(PROBE_TEST)"
 	"$(OBSERVATION_TEST)"
 	"$(DESCRIPTOR_TEST)"
+	"$(FAKE_TRANSPORT_TEST)"
+	"$(STATE_MACHINE_TEST)"
 
 clean:
 	rm -rf "$(BUILD_DIR)"

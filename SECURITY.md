@@ -8,6 +8,15 @@ interface, and does not send bytes to the dock. Its offline observation parser
 accepts bounded metadata but deliberately rejects raw transfer payloads. These
 components are not yet a functional display driver.
 
+The fake transport/state-machine lab is hardware-independent. It has no IOKit
+or IOUSBHost dependency, no real transport implementation, and bounded
+eight-packet queues with a 1024-byte per-packet limit. The exact observed
+identity and endpoint topology must match before the machine advances. Its
+activation state is deliberately blocked as protocol-undocumented, and the
+state-machine source has no call to the transport write API. Publication checks
+compile and run the lab, require zero attempted writes, and inspect linked
+libraries and undefined symbols for hardware-access and networking imports.
+
 The repository also retains a historical local containment/audit toolkit. That
 toolkit does not replace or make the proprietary DisplayLink rendering
 executable auditable. Its primary control was macOS App Sandbox enforcement
