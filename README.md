@@ -5,10 +5,14 @@ UD-3900PDZ** dock, plus a retained audit of DisplayLink Manager 16.2.39.
 
 > [!IMPORTANT]
 > The independent code in `clean-room/` is not yet a display driver. It is a
-> read-only hardware probe: it neither loads DisplayLink software nor sends
-> protocol bytes to the dock. This repository is not an open-source DisplayLink driver,
-> distributes no DisplayLink package, and does not currently drive the
-> dock's USB-graphics HDMI 2/3 outputs.
+> read-only hardware probe plus an offline, metadata-only observation parser.
+> Neither loads DisplayLink software nor sends protocol bytes to the dock. This
+> repository is not an open-source DisplayLink driver and is not yet a
+> functional independent USB-display driver. It distributes no DisplayLink
+> package and does not currently drive the dock's USB-graphics HDMI 2/3 outputs.
+
+This source repository distributes no DisplayLink package or generated vendor
+application.
 
 ## Current result
 
@@ -20,7 +24,10 @@ The first independent milestone is implemented and tested:
 - leaves standard audio and Ethernet interfaces to macOS;
 - does not read or print the dock serial number;
 - never opens, claims, resets, or writes to a USB interface; and
-- uses no DisplayLink executable, library, firmware, resource, or protocol code.
+- uses no DisplayLink executable, library, firmware, resource, or protocol code;
+- validates a bounded, metadata-only observation format offline; and
+- rejects raw payload fields, oversized transfers, out-of-order records, and
+  non-allowlisted USB devices.
 
 Build and run it with the dock attached:
 
@@ -30,6 +37,7 @@ cd DisplayLink-Drivers-Reconstruct
 make test
 make probe
 ./clean-room/build/dock-probe
+make -C clean-room checker
 ```
 
 The observed descriptor topology is:

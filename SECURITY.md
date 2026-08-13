@@ -2,10 +2,11 @@
 
 ## Project boundary
 
-The active project is original, read-only clean-room hardware research. Its
-current probe uses public IOKit registry APIs, does not load vendor code, does
-not open a USB interface, and does not send bytes to the dock. It is not yet a
-functional display driver.
+The active project is original clean-room hardware research. Its current probe
+uses public IOKit registry APIs, does not load vendor code, does not open a USB
+interface, and does not send bytes to the dock. Its offline observation parser
+accepts bounded metadata but deliberately rejects raw transfer payloads. These
+components are not yet a functional display driver.
 
 The repository also retains a historical local containment/audit toolkit. That
 toolkit does not replace or make the proprietary DisplayLink rendering

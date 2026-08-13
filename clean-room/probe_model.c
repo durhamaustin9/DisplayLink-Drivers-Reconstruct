@@ -1,13 +1,13 @@
 #include "probe_model.h"
 
 int
-dl_probe_matches_device(uint32_t vendor_id, uint32_t product_id)
+db_probe_matches_device(uint32_t vendor_id, uint32_t product_id)
 {
-    return vendor_id == DL_PROBE_VENDOR_ID && product_id == DL_PROBE_PRODUCT_ID;
+    return vendor_id == DB_PROBE_VENDOR_ID && product_id == DB_PROBE_PRODUCT_ID;
 }
 
 const char *
-dl_probe_interface_role(const DLProbeInterface *descriptor)
+db_probe_interface_role(const DBProbeInterface *descriptor)
 {
     if (descriptor == 0) {
         return "invalid";

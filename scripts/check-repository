@@ -158,19 +158,25 @@ for clean_room_source in \
     "$clean_room_dir/dock_probe.c" \
     "$clean_room_dir/probe_model.c" \
     "$clean_room_dir/probe_model.h" \
-    "$clean_room_dir/tests/probe_model_tests.c"; do
+    "$clean_room_dir/observation_model.c" \
+    "$clean_room_dir/observation_model.h" \
+    "$clean_room_dir/transcript_check.c" \
+    "$clean_room_dir/tests/probe_model_tests.c" \
+    "$clean_room_dir/tests/observation_model_tests.c"; do
     [[ -f "$clean_room_source" && ! -L "$clean_room_source" ]] || \
         fail "clean-room source is missing or linked: ${clean_room_source#"$repo_dir/"}"
 done
 clean_room_network_pattern='(^|[^[:alnum:]_])(socket|connect|connectx|bind|listen|accept|accept4|send|sendto|sendmsg|recv|recvfrom|recvmsg|getaddrinfo|getnameinfo|gethostbyname|gethostbyaddr)[[:space:]]*\('
 if /usr/bin/grep -E -n -q -- "$clean_room_network_pattern" \
     "$clean_room_dir/dock_probe.c" "$clean_room_dir/probe_model.c" \
-    "$clean_room_dir/probe_model.h"; then
+    "$clean_room_dir/probe_model.h" "$clean_room_dir/observation_model.c" \
+    "$clean_room_dir/observation_model.h" "$clean_room_dir/transcript_check.c"; then
     fail "clean-room probe calls a forbidden networking API"
 fi
 if /usr/bin/grep -E -n -q -- 'kUSBSerialNumberString|USB Serial Number|serialNumber|IOPlatformSerialNumber' \
     "$clean_room_dir/dock_probe.c" "$clean_room_dir/probe_model.c" \
-    "$clean_room_dir/probe_model.h"; then
+    "$clean_room_dir/probe_model.h" "$clean_room_dir/observation_model.c" \
+    "$clean_room_dir/observation_model.h" "$clean_room_dir/transcript_check.c"; then
     fail "clean-room probe attempts to read a serial-number property"
 fi
 /usr/bin/xcrun clang \
@@ -199,6 +205,26 @@ clean_room_test_binary="$controller_check_root/clean-room-model-tests"
     "$clean_room_dir/tests/probe_model_tests.c" \
     -o "$clean_room_test_binary" || fail "could not compile clean-room model tests"
 "$clean_room_test_binary" || fail "clean-room model tests failed"
+clean_room_observation_test_binary="$controller_check_root/clean-room-observation-tests"
+/usr/bin/xcrun clang \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -I "$clean_room_dir" \
+    "$clean_room_dir/observation_model.c" \
+    "$clean_room_dir/probe_model.c" \
+    "$clean_room_dir/tests/observation_model_tests.c" \
+    -o "$clean_room_observation_test_binary" || \
+    fail "could not compile clean-room observation tests"
+"$clean_room_observation_test_binary" || fail "clean-room observation tests failed"
+clean_room_transcript_binary="$controller_check_root/clean-room-transcript-check"
+/usr/bin/xcrun clang \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -I "$clean_room_dir" \
+    "$clean_room_dir/transcript_check.c" \
+    "$clean_room_dir/observation_model.c" \
+    "$clean_room_dir/probe_model.c" \
+    -o "$clean_room_transcript_binary" || fail "could not link clean-room transcript checker"
 
 source_manifest="$repo_dir/manifests/16.2.39/app-contents.sha256"
 payload_manifest="$repo_dir/manifests/16.2.39/macho-payloads.sha256"
@@ -286,10 +312,10 @@ while IFS= read -r -d '' relative_path; do
     [[ -f "$path" ]] || fail "tracked path is not a regular file: $relative_path"
 
     case "$relative_path" in
-        .work/*|build/*|dist/*|artifacts/*|vendor/*|expanded/*|tools/build/*|.codex/*|.agents/*|.claude/*|.cursor/*|.idea/*|.vscode/*|*/.work/*|*/build/*|*/dist/*|*/artifacts/*|*/vendor/*|*/expanded/*|*/.codex/*|*/.agents/*|*/.claude/*|*/.cursor/*|*/.idea/*|*/.vscode/*)
+        .work/*|build/*|dist/*|artifacts/*|vendor/*|expanded/*|captures/*|observations-private/*|tools/build/*|.codex/*|.agents/*|.claude/*|.cursor/*|.idea/*|.vscode/*|*/.work/*|*/build/*|*/dist/*|*/artifacts/*|*/vendor/*|*/expanded/*|*/captures/*|*/observations-private/*|*/.codex/*|*/.agents/*|*/.claude/*|*/.cursor/*|*/.idea/*|*/.vscode/*)
             fail "tracked path is inside a private/generated directory: $relative_path"
             ;;
-        *.pkg|*.dmg|*.zip|*.tar|*.tgz|*.gz|*.bz2|*.xz|*.7z|*.rar|*.spkg|*.metallib|*.car|*.mov|*.icns|*.png|*.xar|*.bom|*.der|*.codedirectory|*.cer|*.crt|*.p12|*.pfx|*.pem|*.key|*.mobileprovision|*.app/*|*/_CodeSignature/*|*/CodeResources)
+        *.pkg|*.dmg|*.zip|*.tar|*.tgz|*.gz|*.bz2|*.xz|*.7z|*.rar|*.spkg|*.metallib|*.car|*.mov|*.icns|*.png|*.xar|*.bom|*.der|*.codedirectory|*.cer|*.crt|*.p12|*.pfx|*.pem|*.key|*.mobileprovision|*.dbobs|*.app/*|*/_CodeSignature/*|*/CodeResources)
             fail "tracked proprietary/generated artifact type: $relative_path"
             ;;
     esac

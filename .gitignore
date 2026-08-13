@@ -74,6 +74,11 @@ clean-room/build/
 *.trace
 *.pcap
 *.pcapng
+*.dbobs
+captures/
+**/captures/
+observations-private/
+**/observations-private/
 *.crash
 *.ips
 core

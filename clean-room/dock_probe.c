@@ -41,7 +41,7 @@ is_target_device(io_registry_entry_t entry)
     uint32_t product_id = 0;
 
     return device_identity(entry, &vendor_id, &product_id) &&
-        dl_probe_matches_device(vendor_id, product_id);
+        db_probe_matches_device(vendor_id, product_id);
 }
 
 static int
@@ -123,7 +123,7 @@ print_target_interfaces(void)
 
     while ((entry = IOIteratorNext(iterator)) != IO_OBJECT_NULL) {
         if (interface_belongs_to_target(entry)) {
-            DLProbeInterface descriptor = {
+            DBProbeInterface descriptor = {
                 .number = optional_u32(entry, CFSTR("bInterfaceNumber")),
                 .interface_class = optional_u32(entry, CFSTR("bInterfaceClass")),
                 .subclass = optional_u32(entry, CFSTR("bInterfaceSubClass")),
@@ -136,7 +136,7 @@ print_target_interfaces(void)
                 descriptor.number, descriptor.interface_class,
                 descriptor.subclass, descriptor.protocol,
                 descriptor.alternate_setting, descriptor.endpoint_count,
-                dl_probe_interface_role(&descriptor));
+                db_probe_interface_role(&descriptor));
             count++;
         }
         IOObjectRelease(entry);
@@ -162,14 +162,14 @@ main(int argc, char **argv)
         return argc > 1 && strcmp(argv[1], "--help") == 0 ? 0 : 64;
     }
 
-    puts("DisplayLink clean-room descriptor probe (read-only)");
+    puts("DockBridge clean-room descriptor probe (read-only)");
     puts("No interface is opened, claimed, or sent a transfer.");
     devices = print_target_devices();
     if (devices < 0) {
         return 70;
     }
     if (devices == 0) {
-        fputs("probe: Plugable/DisplayLink USB device 17e9:4323 was not found\n",
+        fputs("probe: allowlisted USB-display dock 17e9:4323 was not found\n",
             stderr);
         return 2;
     }

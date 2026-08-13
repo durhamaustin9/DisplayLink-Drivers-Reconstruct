@@ -16,6 +16,9 @@ design of the project.
 5. Never describe an untested device as supported.
 6. Do not claim the contained controller's open/reopen/quit lifecycle is
    qualified without exact-path process evidence and a hardware run.
+7. Read `clean-room/PROVENANCE.md` before contributing protocol research. Do
+   not translate, paraphrase, or use decompiled vendor code as an implementation
+   template; protocol facts need a lawful, reviewable behavioral source.
 
 ## Supporting a new DisplayLink release
 
@@ -42,4 +45,4 @@ hash check merely to accept a newer package.
   sibling-process lifecycle control, do not describe those source checks as an
   enforced or exhaustive network denial.
 - Do not add an automatic login item or a second menu-bar status item. The
-  nested engine's existing DisplayLink item is the sole menu UI.
+  DockBridge controller owns the compatibility wrapper's sole visible menu UI.

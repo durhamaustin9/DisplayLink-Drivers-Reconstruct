@@ -4,7 +4,9 @@ Status reviewed: 2026-08-13
 
 This is a proposed architecture, not a finished driver and not a claim that a
 formal two-team clean-room process has already occurred. The only implemented
-independent component is the read-only descriptor probe in `clean-room/`.
+independent components are the read-only descriptor probe and the bounded,
+metadata-only observation parser in `clean-room/`. The parser is protocol
+agnostic and carries no captured vendor payload.
 
 ## Verified starting point
 
@@ -65,6 +67,8 @@ libdlo/udl work targets earlier DisplayLink generations.
 ## Research and release gates
 
 - record only protocol facts legally obtained for interoperability;
+- follow the repository's clean-room provenance rules and keep observer facts
+  separate from implementation decisions;
 - copy no proprietary code, firmware, resource, key, or protected-media secret;
 - preserve provenance for every protocol fact and independently authored file;
 - use an exact VID:PID/revision allowlist and never flash firmware;

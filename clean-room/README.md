@@ -17,7 +17,34 @@ make -C clean-room probe
 ./clean-room/build/dock-probe
 ```
 
-Run the hardware-independent classification tests with:
+The protocol lab also includes an independently authored, bounded parser for
+metadata-only observations. It deliberately rejects payload bytes: public
+source code and fixtures can describe transfer order, direction, kind,
+endpoint, and length without accidentally publishing a vendor message, key, or
+screen data. Build the parser with:
+
+```sh
+make -C clean-room checker
+./clean-room/build/transcript-check /path/to/private-observation.dbobs
+```
+
+The version-one text format is:
+
+```text
+dockbridge-observation-v1
+origin synthetic
+device 17e9 4323 3156
+interface 0 ff 00 03 0 2
+transfer 0 out control 00 64
+transfer 1 out bulk 02 4096
+transfer 2 in bulk 84 512
+```
+
+This example is synthetic and is not a claim about Ella protocol messages.
+Captured payloads, firmware, keys, serial numbers, and screen contents must not
+be committed. Read [PROVENANCE.md](PROVENANCE.md) before adding an observation.
+
+Run all hardware-independent classification and parser tests with:
 
 ```sh
 make -C clean-room test
