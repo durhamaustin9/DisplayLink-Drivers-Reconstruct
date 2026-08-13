@@ -3,9 +3,9 @@ SHELL := /bin/zsh
 PKG ?=
 SOURCE_APP ?= $(CURDIR)/.work/source/DisplayLink Manager.app
 LOCAL_APP ?= $(CURDIR)/build/DisplayLink Local.app
-CORE_APP ?= $(CURDIR)/build/DisplayLink Core.app
-CONTROLLER_APP ?= $(CURDIR)/build/DisplayLink Contained.app
-INSTALLED_CONTROLLER_APP ?= $(HOME)/Applications/DisplayLink Contained.app
+CORE_APP ?= $(CURDIR)/build/DockBridge Engine.app
+CONTROLLER_APP ?= $(CURDIR)/build/DockBridge.app
+INSTALLED_CONTROLLER_APP ?= $(HOME)/Applications/DockBridge.app
 
 .PHONY: help test probe test-clean-room prepare local core controller verify verify-local verify-core verify-controller verify-installed integration-local integration-core integration-contained install-contained open-contained tools
 
@@ -24,7 +24,7 @@ help:
 	@echo "Build and verify the tested Local profile:"
 	@echo '  make integration-local PKG="/path/to/DisplayLink...pkg"'
 	@echo
-	@echo "Build the Finder-launchable, lifecycle-supervised app:"
+	@echo "Build the Finder-launchable DockBridge compatibility app:"
 	@echo '  make integration-contained PKG="/path/to/DisplayLink...pkg"'
 	@echo '  make install-contained'
 	@echo '  make open-contained'

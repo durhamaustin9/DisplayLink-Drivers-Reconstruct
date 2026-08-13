@@ -42,10 +42,12 @@ firmware, so the dock remains inside the trusted path.
 
 ## Contained controller boundary
 
-The optional `DisplayLink Contained.app` is a Finder-launchable wrapper whose
-Objective-C source is in this repository. It embeds the exact verified,
-single-process Core profile under `Contents/Helpers/DisplayLink Core
-Engine.app`; no generated controller or nested vendor app is distributed here.
+The optional `DockBridge.app` is a Finder-launchable wrapper whose Objective-C
+source is in this repository. It embeds the exact verified, single-process
+compatibility profile under `Contents/Helpers/DockBridge Engine.app`; no
+generated controller or nested vendor app is distributed here. Its visible
+name, icon, executable name, and bundle identifiers are independently authored,
+but the engine payload remains proprietary vendor code.
 
 The controller intentionally runs without App Sandbox or other entitlements.
 That is necessary for it to enumerate and signal sibling processes during
@@ -69,11 +71,11 @@ or a foreign DisplayLink application/helper causes refusal. The owning official
 or Local installation must unregister its own background items; the controller
 does not cross that ownership boundary.
 
-The controller has no separate status item. The nested engine provides the sole
-DisplayLink menu-bar icon, and its normal Quit action initiates the supervised
-shutdown. Automatic login and crash restart are disabled, and the nested Core
-profile contains no XPC helper, crash helper, LaunchAgent, or login item.
-Launching the nested engine directly bypasses this lifecycle boundary.
+The controller supplies the DockBridge status item and **Quit Completely**
+action. The vendor status item is requested off through launch preferences.
+Automatic login and crash restart are disabled, and the nested profile contains
+no XPC helper, crash helper, LaunchAgent, or login item. Launching the nested
+engine directly bypasses this lifecycle boundary.
 
 The controller does not request Screen Recording access. That permission and
 macOS's observation indicator remain associated with the nested proprietary

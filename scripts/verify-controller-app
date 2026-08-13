@@ -16,8 +16,8 @@ fi
 
 app=$1
 contents="$app/Contents"
-executable="$contents/MacOS/DisplayLinkContainedController"
-nested_engine="$contents/Helpers/DisplayLink Core Engine.app"
+executable="$contents/MacOS/DockBridgeController"
+nested_engine="$contents/Helpers/DockBridge Engine.app"
 info_plist="$contents/Info.plist"
 icon="$contents/Resources/ControllerIcon.icns"
 
@@ -48,7 +48,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM HUP
 
-expected_executable="$temp_root/DisplayLinkContainedController"
+expected_executable="$temp_root/DockBridgeController"
 payload_hasher="$temp_root/macho-payload"
 (
     cd "$temp_root"
@@ -71,7 +71,7 @@ payload_hasher="$temp_root/macho-payload"
 /usr/bin/codesign \
     --force \
     --sign - \
-    --identifier "io.github.durhamaustin9.DisplayLinkContainedController" \
+    --identifier "io.github.durhamaustin9.DockBridge" \
     --options runtime \
     --timestamp=none \
     "$expected_executable" >/dev/null 2>&1 || fail "could not sign the expected source-built controller"
@@ -89,12 +89,12 @@ actual_outer_directories="$temp_root/actual-outer-directories"
 expected_outer_directories="$temp_root/expected-outer-directories"
 (
     cd "$contents"
-    /usr/bin/find . -type f ! -path './Helpers/DisplayLink Core Engine.app/*' -print | \
+    /usr/bin/find . -type f ! -path './Helpers/DockBridge Engine.app/*' -print | \
         /usr/bin/sed 's|^\./||' | LC_ALL=C /usr/bin/sort > "$actual_outer"
 )
 {
     /bin/echo 'Info.plist'
-    /bin/echo 'MacOS/DisplayLinkContainedController'
+    /bin/echo 'MacOS/DockBridgeController'
     /bin/echo 'Resources/ControllerIcon.icns'
     /bin/echo '_CodeSignature/CodeResources'
 } | LC_ALL=C /usr/bin/sort > "$expected_outer"
@@ -103,7 +103,7 @@ if ! /usr/bin/diff -u "$expected_outer" "$actual_outer"; then
 fi
 (
     cd "$contents"
-    /usr/bin/find . -path './Helpers/DisplayLink Core Engine.app' -prune -o -type d -print | \
+    /usr/bin/find . -path './Helpers/DockBridge Engine.app' -prune -o -type d -print | \
         /usr/bin/sed 's|^\./||' | LC_ALL=C /usr/bin/sort > "$actual_outer_directories"
 )
 {
@@ -121,8 +121,8 @@ expected_info_hash=$(/usr/bin/shasum -a 256 "$expected_info" | /usr/bin/awk '{ p
 actual_info_hash=$(/usr/bin/shasum -a 256 "$info_plist" | /usr/bin/awk '{ print $1 }')
 [[ "$actual_info_hash" == "$expected_info_hash" ]] || fail "controller Info.plist differs from the pinned source"
 
-[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info_plist")" == "io.github.durhamaustin9.DisplayLinkContainedController" ]] || fail "unexpected controller bundle identifier"
-[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$info_plist")" == "DisplayLink Contained" ]] || fail "unexpected controller display name"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info_plist")" == "io.github.durhamaustin9.DockBridge" ]] || fail "unexpected controller bundle identifier"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$info_plist")" == "DockBridge" ]] || fail "unexpected controller display name"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_plist")" == "1.0.0" ]] || fail "unexpected controller version"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$info_plist")" == "true" ]] || fail "controller must be an accessory application"
 
@@ -139,7 +139,7 @@ for architecture in x86_64 arm64; do
 
     /usr/bin/codesign --verify --strict -a "$architecture" --verbose=2 "$executable" || fail "controller signature failed ($architecture)"
     /usr/bin/codesign -d -vvv -a "$architecture" "$executable" >/dev/null 2>"$metadata" || fail "could not inspect controller signature ($architecture)"
-    /usr/bin/grep -F -x -q 'Identifier=io.github.durhamaustin9.DisplayLinkContainedController' "$metadata" || fail "unexpected controller signing identifier ($architecture)"
+    /usr/bin/grep -F -x -q 'Identifier=io.github.durhamaustin9.DockBridge' "$metadata" || fail "unexpected controller signing identifier ($architecture)"
     /usr/bin/grep -F -x -q 'Signature=adhoc' "$metadata" || fail "controller signature is not ad hoc ($architecture)"
     /usr/bin/grep -F -x -q 'TeamIdentifier=not set' "$metadata" || fail "controller TeamIdentifier is unexpectedly set ($architecture)"
     /usr/bin/grep -F -q 'flags=0x10002(adhoc,runtime)' "$metadata" || fail "controller hardened-runtime flags are missing ($architecture)"

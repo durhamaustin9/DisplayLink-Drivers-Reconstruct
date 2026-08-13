@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char allowed_relative_path[] = "/Contents/MacOS/DisplayLinkUserAgent";
+static const char allowed_relative_path[] = "/Contents/MacOS/DockBridgeEngine";
 static const char displaylink_component_token[] = "displaylink";
 
 static char dl_ascii_lowercase(char character)
@@ -89,7 +89,8 @@ bool dl_path_is_known_displaylink_executable(const char *candidate)
     }
     const char *basename = basename_separator + 1;
 
-    if (strcmp(basename, "DisplayLinkUserAgent") == 0 ||
+    if (strcmp(basename, "DockBridgeEngine") == 0 ||
+        strcmp(basename, "DisplayLinkUserAgent") == 0 ||
         strcmp(basename, "DisplayLinkXpcService") == 0 ||
         strcmp(basename, "DisplayLinkLoginHelper") == 0) {
         return true;

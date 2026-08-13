@@ -5,27 +5,27 @@
 
 int main(void)
 {
-    const char *root = "/opt/displaylink-test/Contained.app/Contents/Helpers/DisplayLink Core Engine.app";
+    const char *root = "/opt/dockbridge-test/DockBridge.app/Contents/Helpers/DockBridge Engine.app";
 
     assert(dl_path_is_exact_engine_executable(root,
-        "/opt/displaylink-test/Contained.app/Contents/Helpers/DisplayLink Core Engine.app/Contents/MacOS/DisplayLinkUserAgent"));
+        "/opt/dockbridge-test/DockBridge.app/Contents/Helpers/DockBridge Engine.app/Contents/MacOS/DockBridgeEngine"));
     assert(dl_path_is_exact_engine_executable(
-        "/opt/displaylink-test/Contained.app/Contents/Helpers/DisplayLink Core Engine.app/",
-        "/opt/displaylink-test/Contained.app/Contents/Helpers/DisplayLink Core Engine.app/Contents/MacOS/DisplayLinkUserAgent"));
+        "/opt/dockbridge-test/DockBridge.app/Contents/Helpers/DockBridge Engine.app/",
+        "/opt/dockbridge-test/DockBridge.app/Contents/Helpers/DockBridge Engine.app/Contents/MacOS/DockBridgeEngine"));
 
     assert(!dl_path_is_exact_engine_executable(root,
-        "/opt/displaylink-test/Contained.app/Contents/Helpers/DisplayLink Core Engine.app.evil/Contents/MacOS/DisplayLinkUserAgent"));
+        "/opt/dockbridge-test/DockBridge.app/Contents/Helpers/DockBridge Engine.app.evil/Contents/MacOS/DockBridgeEngine"));
     assert(!dl_path_is_exact_engine_executable(root,
         "/Applications/DisplayLink Manager.app/Contents/MacOS/DisplayLinkUserAgent"));
     assert(!dl_path_is_exact_engine_executable(root,
-        "/opt/displaylink-test/Contained.app/Contents/Helpers/DisplayLink Core Engine.app/Contents/MacOS/DisplayLinkXpcService"));
+        "/opt/dockbridge-test/DockBridge.app/Contents/Helpers/DockBridge Engine.app/Contents/MacOS/DisplayLinkXpcService"));
     assert(!dl_path_is_exact_engine_executable(root,
-        "/opt/displaylink-test/Contained.app/Contents/Helpers/DisplayLink Core Engine.app/Contents/MacOS/CrashRestartHelper"));
+        "/opt/dockbridge-test/DockBridge.app/Contents/Helpers/DockBridge Engine.app/Contents/MacOS/CrashRestartHelper"));
     assert(!dl_path_is_exact_engine_executable(root,
-        "/opt/displaylink-test/Contained.app/Contents/Helpers/DisplayLink Core Engine.app/Contents/MacOS/Unrelated"));
-    assert(!dl_path_is_exact_engine_executable("relative/path", "/relative/path/Contents/MacOS/DisplayLinkUserAgent"));
+        "/opt/dockbridge-test/DockBridge.app/Contents/Helpers/DockBridge Engine.app/Contents/MacOS/Unrelated"));
+    assert(!dl_path_is_exact_engine_executable("relative/path", "/relative/path/Contents/MacOS/DockBridgeEngine"));
     assert(!dl_path_is_exact_engine_executable(NULL,
-        "/opt/displaylink-test/Contained.app/Contents/Helpers/DisplayLink Core Engine.app/Contents/MacOS/DisplayLinkUserAgent"));
+        "/opt/dockbridge-test/DockBridge.app/Contents/Helpers/DockBridge Engine.app/Contents/MacOS/DockBridgeEngine"));
     assert(!dl_path_is_exact_engine_executable(root, NULL));
 
     assert(dl_path_is_known_displaylink_executable(

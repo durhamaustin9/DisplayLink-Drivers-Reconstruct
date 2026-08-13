@@ -133,6 +133,15 @@ entitlements, and build ad-hoc-signed Local/Core derivatives. They still contain
 and execute proprietary DisplayLink code. They are **not** the clean-room
 replacement requested now and are no longer the recommended path.
 
+For local compatibility testing, the current wrapper is visibly named
+**DockBridge** and its nested privacy identity is **DockBridge Engine**. Both use
+an original source-generated icon and independent bundle identifiers. The
+vendor menu-bar item is requested off; DockBridge supplies its own status menu,
+status dialog, and supervised **Quit Completely** action. This is surface
+rebranding, not a claim that the proprietary engine was rebuilt from source.
+Internal vendor symbols, protocol behavior, firmware, and required legal notices
+remain. macOS still requires and discloses Screen Recording access.
+
 No generated proprietary app is installed by the clean-room probe. On the test
 Mac, the stale `com.displaylink.XpcService` registration that caused the
 “foreign DisplayLink executable” alert was unregistered through its owning app
@@ -140,7 +149,8 @@ bundle, all DisplayLink processes were confirmed stopped, and the obsolete
 generated apps were moved to Trash. The alert was a correct fail-closed safety
 check: it refused to target an executable owned by a different build.
 
-The historical tooling remains for reproducibility and code review:
+The historical and DockBridge compatibility tooling remains for reproducibility
+and code review:
 
 ```sh
 make help

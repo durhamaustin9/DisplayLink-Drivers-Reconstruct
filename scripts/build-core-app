@@ -5,8 +5,9 @@ script_dir=$(cd "$(/usr/bin/dirname "$0")" && /bin/pwd -P)
 repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
 entitlements="$repo_dir/entitlements/core-main.plist"
 rename_source="$repo_dir/tools/rename-excl.c"
+icon_source="$repo_dir/controller/generate-icon.m"
 default_source="$repo_dir/.work/source/DisplayLink Manager.app"
-default_output="$repo_dir/build/DisplayLink Core.app"
+default_output="$repo_dir/build/DockBridge Engine.app"
 
 if (( $# > 2 )); then
     /bin/echo "Usage: $0 [source-app] [output-app]" >&2
@@ -46,6 +47,7 @@ output_app="$output_parent/$output_name"
 staging_root=$(/usr/bin/mktemp -d "$output_parent/.displaylink-core.XXXXXX")
 staging_app="$staging_root/payload.app"
 rename_helper="$staging_root/rename-excl"
+icon_generator="$staging_root/generate-icon"
 
 cleanup() {
     if [[ -n "${staging_root:-}" && -d "$staging_root" && "$staging_root" == "$output_parent"/.displaylink-core.* ]]; then
@@ -55,6 +57,9 @@ cleanup() {
 trap cleanup EXIT INT TERM HUP
 
 /usr/bin/xcrun clang -std=c11 -Wall -Wextra -Werror "$rename_source" -o "$rename_helper" || fail "Xcode Command Line Tools are required to compile the exclusive-rename helper"
+/usr/bin/xcrun clang -fobjc-arc -Wall -Wextra -Werror -Wno-deprecated-declarations \
+    -framework AppKit "$icon_source" -o "$icon_generator" || \
+    fail "could not compile the DockBridge icon generator"
 
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl "$source_app" "$staging_app"
 "$script_dir/verify-source-app" "$staging_app"
@@ -73,15 +78,31 @@ info_plist="$contents/Info.plist"
     "$contents/Resources/Metadata.appintents" \
     "$contents/_CodeSignature"
 
+/bin/mv "$contents/MacOS/DisplayLinkUserAgent" "$contents/MacOS/DockBridgeEngine"
+/bin/rm -f -- "$contents/Resources/dlmIcon.icns"
+"$icon_generator" "$contents/Resources/DockBridgeIcon.icns" || \
+    fail "could not render the DockBridge engine icon"
+
+strings_file="$contents/Resources/DisplayLink Manager.strings"
+/usr/bin/plutil -convert xml1 "$strings_file" || fail "could not normalize the UI strings"
+/usr/bin/sed -i '' -e 's/DisplayLink/DockBridge/g' -e 's/Plugable/DockBridge/g' \
+    "$strings_file" || fail "could not apply the visible DockBridge UI name"
+
 if /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes' "$info_plist" >/dev/null 2>&1; then
     /usr/libexec/PlistBuddy -c 'Delete :CFBundleURLTypes' "$info_plist"
 fi
-/usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName DisplayLink Core (USB Only)' "$info_plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName DockBridge Engine' "$info_plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleExecutable DockBridgeEngine' "$info_plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleName DockBridgeEngine' "$info_plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier io.github.durhamaustin9.DockBridgeEngine' "$info_plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleIconFile DockBridgeIcon' "$info_plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleIconName DockBridgeIcon' "$info_plist"
+/usr/libexec/PlistBuddy -c 'Set :NSHumanReadableCopyright Third-party compatibility engine; see included notices.' "$info_plist"
 
 /usr/bin/codesign \
     --force \
     --sign - \
-    --identifier "com.displaylink.DisplayLinkUserAgent" \
+    --identifier "io.github.durhamaustin9.DockBridgeEngine" \
     --options runtime \
     --timestamp=none \
     --entitlements "$entitlements" \

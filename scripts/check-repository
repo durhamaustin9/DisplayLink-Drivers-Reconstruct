@@ -204,6 +204,7 @@ source_manifest="$repo_dir/manifests/16.2.39/app-contents.sha256"
 payload_manifest="$repo_dir/manifests/16.2.39/macho-payloads.sha256"
 output_info_manifest="$repo_dir/manifests/16.2.39/output-info.sha256"
 installer_manifest="$repo_dir/manifests/16.2.39/installer.sha256"
+rebrand_manifest="$repo_dir/manifests/16.2.39/rebrand-resources.sha256"
 
 /usr/bin/awk '
     {
@@ -254,6 +255,21 @@ installer_manifest="$repo_dir/manifests/16.2.39/installer.sha256"
     }
     END { if (NR != 2 || !seen["local"] || !seen["core"]) exit 1 }
 ' "$output_info_manifest" || fail "transformed Info.plist manifest is invalid"
+
+/usr/bin/awk -F '\t' '
+    BEGIN {
+        expected["Resources/DockBridgeIcon.icns"] = 1
+        expected["Resources/DisplayLink Manager.strings"] = 1
+    }
+    {
+        if (NF != 2 || length($1) != 64 || $1 ~ /[^0-9a-f]/ ||
+            !expected[$2] || seen[$2]++) exit 1
+    }
+    END {
+        if (NR != 2) exit 1
+        for (path in expected) if (!seen[path]) exit 1
+    }
+' "$rebrand_manifest" || fail "rebranded resource manifest is invalid"
 
 installer_hash=$(/usr/bin/awk 'NR == 1 { print $0 }' "$installer_manifest")
 installer_lines=$(/usr/bin/wc -l < "$installer_manifest" | /usr/bin/tr -d ' ')

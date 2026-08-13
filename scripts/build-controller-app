@@ -5,8 +5,8 @@ script_dir=$(cd "$(/usr/bin/dirname "$0")" && /bin/pwd -P)
 repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
 controller_dir="$repo_dir/controller"
 rename_source="$repo_dir/tools/rename-excl.c"
-default_engine="$repo_dir/build/DisplayLink Core.app"
-default_output="$repo_dir/build/DisplayLink Contained.app"
+default_engine="$repo_dir/build/DockBridge Engine.app"
+default_output="$repo_dir/build/DockBridge.app"
 
 if (( $# > 2 )); then
     /bin/echo "Usage: $0 [verified-core-app] [output-controller-app]" >&2
@@ -63,7 +63,7 @@ trap cleanup EXIT INT TERM HUP
     "$staging_app/Contents/Resources"
 /bin/cp "$controller_dir/Info.plist" "$staging_app/Contents/Info.plist"
 
-nested_engine="$staging_app/Contents/Helpers/DisplayLink Core Engine.app"
+nested_engine="$staging_app/Contents/Helpers/DockBridge Engine.app"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl "$engine_app" "$nested_engine"
 "$script_dir/verify-core-app" "$nested_engine"
 
@@ -79,7 +79,7 @@ nested_engine="$staging_app/Contents/Helpers/DisplayLink Core Engine.app"
     "$controller_dir/main.m" \
     "$controller_dir/path_policy.c" \
     -framework AppKit \
-    -o "$staging_app/Contents/MacOS/DisplayLinkContainedController" || \
+    -o "$staging_app/Contents/MacOS/DockBridgeController" || \
     fail "could not compile the universal controller"
 
 /usr/bin/xcrun clang \
@@ -95,7 +95,7 @@ nested_engine="$staging_app/Contents/Helpers/DisplayLink Core Engine.app"
 /usr/bin/codesign \
     --force \
     --sign - \
-    --identifier "io.github.durhamaustin9.DisplayLinkContainedController" \
+    --identifier "io.github.durhamaustin9.DockBridge" \
     --options runtime \
     --timestamp=none \
     "$staging_app"

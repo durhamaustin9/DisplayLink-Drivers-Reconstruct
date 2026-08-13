@@ -5,17 +5,17 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>DisplayLink Contained</string>
+    <string>DockBridge</string>
     <key>CFBundleExecutable</key>
-    <string>DisplayLinkContainedController</string>
+    <string>DockBridgeController</string>
     <key>CFBundleIconFile</key>
     <string>ControllerIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>io.github.durhamaustin9.DisplayLinkContainedController</string>
+    <string>io.github.durhamaustin9.DockBridge</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>DisplayLinkContainedController</string>
+    <string>DockBridge</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

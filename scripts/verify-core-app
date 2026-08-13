@@ -6,7 +6,9 @@ repo_dir=$(cd "$script_dir/.." && /bin/pwd -P)
 source_manifest="$repo_dir/manifests/16.2.39/app-contents.sha256"
 payload_manifest="$repo_dir/manifests/16.2.39/macho-payloads.sha256"
 output_info_manifest="$repo_dir/manifests/16.2.39/output-info.sha256"
+rebrand_manifest="$repo_dir/manifests/16.2.39/rebrand-resources.sha256"
 payload_source="$repo_dir/tools/macho-payload.c"
+icon_source="$repo_dir/controller/generate-icon.m"
 
 if (( $# != 1 )); then
     /bin/echo "Usage: $0 app-bundle" >&2
@@ -15,7 +17,7 @@ fi
 
 app=$1
 contents="$app/Contents"
-main_binary="$contents/MacOS/DisplayLinkUserAgent"
+main_binary="$contents/MacOS/DockBridgeEngine"
 info_plist="$contents/Info.plist"
 
 fail() {
@@ -26,7 +28,9 @@ fail() {
 [[ -d "$contents" && ! -L "$app" ]] || fail "not a regular application bundle: $app"
 [[ -f "$main_binary" && -x "$main_binary" && ! -L "$main_binary" ]] || fail "main executable is missing, linked, or non-executable"
 [[ "$(/usr/bin/stat -f '%Lp' "$main_binary")" == "755" ]] || fail "unexpected main executable mode"
-[[ -f "$source_manifest" && -f "$payload_manifest" && -f "$output_info_manifest" && -f "$payload_source" ]] || fail "verification input is missing"
+[[ -f "$source_manifest" && -f "$payload_manifest" && -f "$output_info_manifest" && \
+    -f "$rebrand_manifest" && -f "$payload_source" && -f "$icon_source" ]] || \
+    fail "verification input is missing"
 
 for forbidden in \
     "$contents/MacOS/DisplayLinkXpcService" \
@@ -65,7 +69,13 @@ expected_files="$temp_root/expected-files"
             $0 ~ /^Resources\/Metadata\.appintents\//) {
             next
         }
-        print
+        if ($0 == "MacOS/DisplayLinkUserAgent") {
+            print "MacOS/DockBridgeEngine"
+        } else if ($0 == "Resources/dlmIcon.icns") {
+            print "Resources/DockBridgeIcon.icns"
+        } else {
+            print
+        }
     }
 ' "$source_manifest" | LC_ALL=C /usr/bin/sort > "$expected_files"
 if ! /usr/bin/diff -u "$expected_files" "$actual_files"; then
@@ -76,7 +86,7 @@ while IFS= read -r manifest_line; do
     expected_hash=${manifest_line%% *}
     relative_path=${manifest_line#*  }
     case "$relative_path" in
-        CodeResources|Info.plist|MacOS/DisplayLinkUserAgent|MacOS/DisplayLinkXpcService|MacOS/CrashRestartHelper|Library/*|Resources/Metadata.appintents/*|_CodeSignature/CodeResources)
+        CodeResources|Info.plist|MacOS/DisplayLinkUserAgent|MacOS/DisplayLinkXpcService|MacOS/CrashRestartHelper|Library/*|Resources/Metadata.appintents/*|Resources/dlmIcon.icns|Resources/DisplayLink\ Manager.strings|_CodeSignature/CodeResources)
             continue
             ;;
     esac
@@ -84,13 +94,26 @@ while IFS= read -r manifest_line; do
     [[ "$actual_hash" == "$expected_hash" ]] || fail "pinned resource changed: $relative_path"
 done < "$source_manifest"
 
-[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info_plist")" == "com.displaylink.DisplayLinkUserAgent" ]] || fail "unexpected bundle identifier"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info_plist")" == "io.github.durhamaustin9.DockBridgeEngine" ]] || fail "unexpected bundle identifier"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_plist")" == "16.2.39" ]] || fail "unexpected bundle version"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$info_plist")" == "16.2.39" ]] || fail "unexpected short version"
-[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$info_plist")" == "DisplayLink Core (USB Only)" ]] || fail "unexpected display name"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$info_plist")" == "DockBridge Engine" ]] || fail "unexpected display name"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$info_plist")" == "DockBridgeEngine" ]] || fail "unexpected executable name"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$info_plist")" == "DockBridgeIcon" ]] || fail "unexpected icon name"
 expected_info_hash=$(/usr/bin/awk -F '\t' '$2 == "core" && $3 == "Info.plist" { print $1 }' "$output_info_manifest")
 actual_info_hash=$(/usr/bin/shasum -a 256 "$info_plist" | /usr/bin/awk '{ print $1 }')
 [[ "$actual_info_hash" == "$expected_info_hash" ]] || fail "transformed Info.plist differs from the pinned Core profile"
+
+for rebranded_resource in 'Resources/DockBridgeIcon.icns' 'Resources/DisplayLink Manager.strings'; do
+    expected_resource_hash=$(/usr/bin/awk -F '\t' -v path="$rebranded_resource" '$2 == path { print $1 }' "$rebrand_manifest")
+    actual_resource_hash=$(/usr/bin/shasum -a 256 "$contents/$rebranded_resource" | /usr/bin/awk '{ print $1 }')
+    [[ ${#expected_resource_hash} == 64 && "$actual_resource_hash" == "$expected_resource_hash" ]] || \
+        fail "rebranded resource differs from the pinned transformation: $rebranded_resource"
+done
+if /usr/bin/strings -a "$contents/Resources/DisplayLink Manager.strings" | \
+    /usr/bin/grep -E -i -q 'DisplayLink|Plugable'; then
+    fail "visible UI strings still contain a retired product name"
+fi
 
 /usr/bin/codesign --verify --strict --all-architectures --verbose=2 "$app"
 
@@ -123,7 +146,7 @@ for architecture in x86_64 arm64; do
 
     /usr/bin/codesign --verify --strict -a "$architecture" --verbose=2 "$main_binary" || fail "signature verification failed ($architecture)"
     /usr/bin/codesign -d -vvv -a "$architecture" "$main_binary" >/dev/null 2>"$metadata" || fail "could not inspect signature ($architecture)"
-    /usr/bin/grep -F -x -q 'Identifier=com.displaylink.DisplayLinkUserAgent' "$metadata" || fail "unexpected signing identifier ($architecture)"
+    /usr/bin/grep -F -x -q 'Identifier=io.github.durhamaustin9.DockBridgeEngine' "$metadata" || fail "unexpected signing identifier ($architecture)"
     /usr/bin/grep -F -x -q 'Signature=adhoc' "$metadata" || fail "signature is not ad hoc ($architecture)"
     /usr/bin/grep -F -x -q 'TeamIdentifier=not set' "$metadata" || fail "TeamIdentifier is unexpectedly set ($architecture)"
     /usr/bin/grep -F -q 'flags=0x10002(adhoc,runtime)' "$metadata" || fail "ad-hoc hardened-runtime flags are missing ($architecture)"

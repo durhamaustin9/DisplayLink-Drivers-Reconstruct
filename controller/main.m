@@ -15,11 +15,11 @@
 #include <time.h>
 #include <unistd.h>
 
-static NSString *const DLEngineBundleIdentifier = @"com.displaylink.DisplayLinkUserAgent";
+static NSString *const DLEngineBundleIdentifier = @"io.github.durhamaustin9.DockBridgeEngine";
 static NSString *const DLControllerRelativePath =
-    @"Contents/MacOS/DisplayLinkContainedController";
-static NSString *const DLEngineRelativePath = @"Contents/Helpers/DisplayLink Core Engine.app";
-static NSString *const DLMainRelativePath = @"Contents/MacOS/DisplayLinkUserAgent";
+    @"Contents/MacOS/DockBridgeController";
+static NSString *const DLEngineRelativePath = @"Contents/Helpers/DockBridge Engine.app";
+static NSString *const DLMainRelativePath = @"Contents/MacOS/DockBridgeEngine";
 
 typedef struct {
     pid_t pid;
@@ -169,7 +169,7 @@ static int DLRunTaskDiscardingOutput(NSString *executable, NSArray<NSString *> *
 
     NSError *error = nil;
     if (![task launchAndReturnError:&error]) {
-        NSLog(@"DisplayLink controller: could not launch %@: %@", executable,
+        NSLog(@"DockBridge controller: could not launch %@: %@", executable,
             error.localizedDescription);
         return -1;
     }
@@ -256,7 +256,7 @@ static DLForeignProcessScanResult DLScanForForeignDisplayLinkProcesses(
     NSArray<NSNumber *> *allIdentifiers = DLAllProcessIdentifiers();
     if (allIdentifiers == nil) {
         if (detail != NULL) {
-            *detail = @"Process enumeration was uncertain while checking for foreign DisplayLink executables.";
+            *detail = @"Process enumeration was uncertain while checking for legacy USB-display executables.";
         }
         return DLForeignProcessScanResultUncertain;
     }
@@ -272,7 +272,7 @@ static DLForeignProcessScanResult DLScanForForeignDisplayLinkProcesses(
             if (detail != NULL) {
                 *detail = [NSString stringWithFormat:
                     @"The executable path for live PID %d could not be resolved while "
-                     "checking for foreign DisplayLink executables. No process was signaled.",
+                     "checking for legacy USB-display executables. No process was signaled.",
                     pid];
             }
             return DLForeignProcessScanResultUncertain;
@@ -287,8 +287,8 @@ static DLForeignProcessScanResult DLScanForForeignDisplayLinkProcesses(
 
         if (detail != NULL) {
             *detail = [NSString stringWithFormat:
-                @"A foreign DisplayLink executable is running (PID %d, %@). Stop the "
-                 "other DisplayLink build first; this controller will not adopt, stop, "
+                @"A legacy USB-display executable is running (PID %d, %@). Stop the "
+                 "other USB-display build first; this controller will not adopt, stop, "
                  "or signal it.", pid, path];
         }
         return DLForeignProcessScanResultFound;
@@ -315,18 +315,17 @@ static DLServiceRegistrationScanResult DLScanForForbiddenServiceRegistrations(
         }
         if (status == 0) {
             if (detail != NULL) {
-                *detail = [NSString stringWithFormat:
-                    @"The foreign launchd service %@ is registered in the current GUI "
-                     "domain. It may start after active processes disappear. This "
-                     "controller only checks registration and will not unload or mutate it.",
-                    label];
+                *detail =
+                    @"A legacy USB-display background service is registered in the current "
+                     "GUI domain. It may start after active processes disappear. This "
+                     "controller only checks registration and will not unload or mutate it.";
             }
             return DLServiceRegistrationScanResultFound;
         }
         if (detail != NULL) {
             *detail = [NSString stringWithFormat:
-                @"The read-only launchd registration check for %@ returned status %d; "
-                 "absence could not be proven and nothing was changed.", label, status];
+                @"A read-only legacy background-service check returned status %d; "
+                 "absence could not be proven and nothing was changed.", status];
         }
         return DLServiceRegistrationScanResultUncertain;
     }
@@ -359,14 +358,14 @@ static BOOL DLSignalExactMainProcesses(NSString *engineRoot, int signalNumber,
         }
         if (boundIdentity.valid && pid == boundIdentity.pid &&
             DLStateOfBoundProcess(boundIdentity) != DLBoundProcessStateSame) {
-            NSLog(@"DisplayLink controller: PID %d was reused; it was not signaled", pid);
+            NSLog(@"DockBridge controller: PID %d was reused; it was not signaled", pid);
             continue;
         }
         if (kill(pid, signalNumber) == 0 || errno == ESRCH) {
-            NSLog(@"DisplayLink controller: signal %d sent to exact Core PID %d (%@)",
+            NSLog(@"DockBridge controller: signal %d sent to exact engine PID %d (%@)",
                 signalNumber, pid, revalidatedPath);
         } else {
-            NSLog(@"DisplayLink controller: signal %d failed for exact Core PID %d: %s",
+            NSLog(@"DockBridge controller: signal %d failed for exact engine PID %d: %s",
                 signalNumber, pid, strerror(errno));
         }
     }
@@ -456,7 +455,7 @@ static DLZeroScanResult DLScanForZeroState(NSString *engineRoot,
             }
             if (foreignScan == DLForeignProcessScanResultFound) {
                 if (detail != NULL) {
-                    *detail = foreignDetail ?: @"A foreign DisplayLink executable is running.";
+                    *detail = foreignDetail ?: @"A legacy USB-display executable is running.";
                 }
                 return DLZeroScanResultBusy;
             }
@@ -580,7 +579,7 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
     }
 
     result.success = YES;
-    result.message = @"The bound Core process is gone, known foreign DisplayLink "
+    result.message = @"The bound engine process is gone, known legacy USB-display "
         "executable paths are absent, and pinned foreign launchd services are unregistered.";
     return result;
 }
@@ -603,6 +602,7 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
 @property(nonatomic, copy) NSString *fatalAfterCleanup;
 @property(nonatomic, strong) dispatch_source_t termSignalSource;
 @property(nonatomic, strong) dispatch_source_t interruptSignalSource;
+@property(nonatomic, strong) NSStatusItem *statusItem;
 @end
 
 @implementation DLControllerDelegate
@@ -611,6 +611,25 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
 {
     (void)notification;
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+
+    self.statusItem = [[NSStatusBar systemStatusBar]
+        statusItemWithLength:NSSquareStatusItemLength];
+    NSImage *menuImage = [[NSImage alloc] initWithContentsOfFile:
+        [NSBundle.mainBundle pathForResource:@"ControllerIcon" ofType:@"icns"]];
+    menuImage.size = NSMakeSize(19.0, 19.0);
+    self.statusItem.button.image = menuImage;
+    self.statusItem.button.toolTip = @"DockBridge";
+    NSMenu *menu = [[NSMenu alloc] initWithTitle:@"DockBridge"];
+    NSMenuItem *openItem = [[NSMenuItem alloc] initWithTitle:@"Open DockBridge"
+        action:@selector(openDockBridge:) keyEquivalent:@""];
+    openItem.target = self;
+    [menu addItem:openItem];
+    [menu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *quitItem = [[NSMenuItem alloc] initWithTitle:@"Quit Completely"
+        action:@selector(quitDockBridge:) keyEquivalent:@"q"];
+    quitItem.target = self;
+    [menu addItem:quitItem];
+    self.statusItem.menu = menu;
 
     self.outerRoot = DLCanonicalExistingPath(NSBundle.mainBundle.bundlePath);
     if (self.outerRoot == nil) {
@@ -666,7 +685,7 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
             self.engineRoot, self.controllerExecutable, &foreignFailure);
     if (foreignScan != DLForeignProcessScanResultClear) {
         [self showStartupErrorAndExit:foreignFailure ?:
-            @"Foreign DisplayLink process absence could not be proven before launch."];
+            @"Legacy USB-display process absence could not be proven before launch."];
         return;
     }
 
@@ -779,7 +798,7 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
             !DLPathIsExactMain(self.engineRoot, path)) {
             if (failure != NULL) {
                 *failure = [NSString stringWithFormat:
-                    @"A foreign DisplayLink main application is already running (PID %d, %@). "
+                    @"A legacy USB-display application is already running (PID %d, %@). "
                      "This controller will not adopt or stop it.",
                     application.processIdentifier, path ?: @"path unavailable"];
             }
@@ -796,10 +815,11 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
     NSURL *engineURL = [NSURL fileURLWithPath:self.engineRoot isDirectory:YES];
     NSWorkspaceOpenConfiguration *configuration =
         [NSWorkspaceOpenConfiguration configuration];
-    configuration.activates = YES;
+    configuration.activates = NO;
     configuration.arguments = @[
         @"-AppAutostart", @"false",
-        @"-ShowMenuBarIcon", @"true",
+        @"-ShowMenuBarIcon", @"false",
+        @"-showMenuBarIcon", @"false",
         @"-DisableRestartOnCrash", @"true",
         @"-FirstSetupCompleted", @"true"
     ];
@@ -942,14 +962,13 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
     self.engineApplication = application;
     self.enginePID = application.processIdentifier;
     self.engineIdentity = identity;
-    NSLog(@"DisplayLink controller: supervising one exact Core PID %d at %@",
+    NSLog(@"DockBridge controller: supervising one exact engine PID %d at %@",
         self.enginePID, self.mainExecutable);
     self.mainMonitorTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
                                                              target:self
                                                            selector:@selector(monitorTrackedMain)
                                                            userInfo:nil
                                                             repeats:YES];
-    [application activateWithOptions:NSApplicationActivateIgnoringOtherApps];
 }
 
 - (void)monitorTrackedMain
@@ -964,7 +983,7 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
             self.engineRoot, self.controllerExecutable, &foreignFailure);
     if (foreignScan != DLForeignProcessScanResultClear) {
         self.fatalAfterCleanup = foreignFailure ?:
-            @"Continuous monitoring could not prove foreign DisplayLink process absence.";
+            @"Continuous monitoring could not prove legacy USB-display process absence.";
         [self requestCleanup:@"foreign or uncertain DisplayLink process appeared"];
         return;
     }
@@ -999,10 +1018,10 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
     }
 
     self.fatalAfterCleanup = [NSString stringWithFormat:
-        @"Another DisplayLink main application appeared while the controller was active "
+        @"Another USB-display application appeared while DockBridge was active "
          "(PID %d, %@). It will not be touched.",
         application.processIdentifier, path ?: @"path unavailable"];
-    [self requestCleanup:@"unexpected DisplayLink main appeared"];
+    [self requestCleanup:@"unexpected legacy USB-display app appeared"];
 }
 
 - (void)workspaceApplicationTerminated:(NSNotification *)notification
@@ -1012,6 +1031,27 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
         application.processIdentifier == self.enginePID) {
         [self requestCleanup:@"tracked Core main exited"];
     }
+}
+
+- (void)openDockBridge:(id)sender
+{
+    (void)sender;
+    NSString *state = (!self.shutdownRequested && !self.engineApplication.isTerminated) ?
+        @"DockBridge Engine is running." : @"DockBridge Engine is not running.";
+    [NSApp activateIgnoringOtherApps:YES];
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.alertStyle = NSAlertStyleInformational;
+    alert.messageText = @"DockBridge";
+    alert.informativeText = [state stringByAppendingString:
+        @"\n\nUse the menu-bar icon to check status or choose Quit Completely."];
+    [alert addButtonWithTitle:@"OK"];
+    [alert runModal];
+}
+
+- (void)quitDockBridge:(id)sender
+{
+    (void)sender;
+    [NSApp terminate:nil];
 }
 
 - (BOOL)applicationShouldHandleReopen:(NSApplication *)sender
@@ -1031,7 +1071,7 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
         DLStateOfBoundProcess(self.engineIdentity) == DLBoundProcessStateSame &&
         [path isEqualToString:self.mainExecutable] &&
         DLPathIsExactMain(self.engineRoot, path)) {
-        [self.engineApplication activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+        [self openDockBridge:nil];
         return YES;
     }
     [self requestCleanup:@"reopen found no validated Core main"];
@@ -1066,7 +1106,7 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
     self.cleanupFailed = NO;
     [self.mainMonitorTimer invalidate];
     self.mainMonitorTimer = nil;
-    NSLog(@"DisplayLink controller: cleanup requested (%@)%@", reason,
+    NSLog(@"DockBridge controller: cleanup requested (%@)%@", reason,
         self.launchInFlight ? @"; waiting for launch completion" : @"");
     [self beginCleanupIfReady];
 }
@@ -1100,11 +1140,11 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
     self.cleanupInProgress = NO;
     if (result.success) {
         self.cleanupSucceeded = YES;
-        NSLog(@"DisplayLink controller: stable Core zero-process state verified");
+        NSLog(@"DockBridge controller: stable engine zero-process state verified");
         if (self.fatalAfterCleanup.length != 0) {
             NSString *message = self.fatalAfterCleanup;
             self.fatalAfterCleanup = nil;
-            [self showAlertWithTitle:@"DisplayLink Contained Could Not Continue"
+            [self showAlertWithTitle:@"DockBridge Could Not Continue"
                              message:message
                               button:@"Close"];
             exit(EXIT_FAILURE);
@@ -1119,8 +1159,8 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
 
     self.cleanupFailed = YES;
     NSString *message = [NSString stringWithFormat:
-        @"The controller stayed open because it could not prove that the exact Core process "
-         "and its bound lifetime identity stopped, that known foreign DisplayLink executable "
+        @"The controller stayed open because it could not prove that the exact engine process "
+         "and its bound lifetime identity stopped, that known legacy USB-display executable "
          "paths were absent, and that pinned foreign launchd services were unregistered. "
          "It never signals or unloads a foreign process or service.\n\n%@",
         result.message ?: @"No diagnostic was returned."];
@@ -1142,7 +1182,7 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
 
 - (void)showStartupErrorAndExit:(NSString *)message
 {
-    [self showAlertWithTitle:@"DisplayLink Contained Did Not Start"
+    [self showAlertWithTitle:@"DockBridge Did Not Start"
                      message:message
                       button:@"Close"];
     exit(EXIT_FAILURE);
