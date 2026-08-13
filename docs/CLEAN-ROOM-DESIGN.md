@@ -16,6 +16,11 @@ auxiliary interface 1, standard USB audio interfaces, and USB networking
 interfaces. The probe reads those descriptors without opening or claiming an
 interface and deliberately omits device and monitor serials.
 
+An independently authored opt-in standard descriptor reader subsequently
+confirmed interface 0 uses bulk OUT `0x02` and bulk IN `0x84`, both with a
+1024-byte maximum packet size, and interface 1 has no endpoints. This establishes
+USB topology, not the meaning or format of messages carried by those endpoints.
+
 This topology is not enough to send pixels. The Ella activation, control,
 head/EDID, mode-setting, frame-record, compression, and recovery protocols need
 independent documentation for this exact hardware revision.

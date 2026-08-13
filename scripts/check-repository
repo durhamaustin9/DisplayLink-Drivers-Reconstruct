@@ -158,10 +158,14 @@ for clean_room_source in \
     "$clean_room_dir/dock_probe.c" \
     "$clean_room_dir/probe_model.c" \
     "$clean_room_dir/probe_model.h" \
+    "$clean_room_dir/descriptor_model.c" \
+    "$clean_room_dir/descriptor_model.h" \
+    "$clean_room_dir/standard_descriptor_reader.m" \
     "$clean_room_dir/observation_model.c" \
     "$clean_room_dir/observation_model.h" \
     "$clean_room_dir/transcript_check.c" \
     "$clean_room_dir/tests/probe_model_tests.c" \
+    "$clean_room_dir/tests/descriptor_model_tests.c" \
     "$clean_room_dir/tests/observation_model_tests.c"; do
     [[ -f "$clean_room_source" && ! -L "$clean_room_source" ]] || \
         fail "clean-room source is missing or linked: ${clean_room_source#"$repo_dir/"}"
@@ -169,15 +173,32 @@ done
 clean_room_network_pattern='(^|[^[:alnum:]_])(socket|connect|connectx|bind|listen|accept|accept4|send|sendto|sendmsg|recv|recvfrom|recvmsg|getaddrinfo|getnameinfo|gethostbyname|gethostbyaddr)[[:space:]]*\('
 if /usr/bin/grep -E -n -q -- "$clean_room_network_pattern" \
     "$clean_room_dir/dock_probe.c" "$clean_room_dir/probe_model.c" \
-    "$clean_room_dir/probe_model.h" "$clean_room_dir/observation_model.c" \
+    "$clean_room_dir/probe_model.h" "$clean_room_dir/descriptor_model.c" \
+    "$clean_room_dir/descriptor_model.h" "$clean_room_dir/standard_descriptor_reader.m" \
+    "$clean_room_dir/observation_model.c" \
     "$clean_room_dir/observation_model.h" "$clean_room_dir/transcript_check.c"; then
     fail "clean-room probe calls a forbidden networking API"
 fi
 if /usr/bin/grep -E -n -q -- 'kUSBSerialNumberString|USB Serial Number|serialNumber|IOPlatformSerialNumber' \
     "$clean_room_dir/dock_probe.c" "$clean_room_dir/probe_model.c" \
-    "$clean_room_dir/probe_model.h" "$clean_room_dir/observation_model.c" \
+    "$clean_room_dir/probe_model.h" "$clean_room_dir/descriptor_model.c" \
+    "$clean_room_dir/descriptor_model.h" "$clean_room_dir/standard_descriptor_reader.m" \
+    "$clean_room_dir/observation_model.c" \
     "$clean_room_dir/observation_model.h" "$clean_room_dir/transcript_check.c"; then
     fail "clean-room probe attempts to read a serial-number property"
+fi
+clean_room_mutating_usb_pattern='configureWithValue:|resetWithError:|sendDeviceRequest:|enqueueDeviceRequest:|IOUSBHostObjectInitOptionsDevice(Capture|Seize)'
+if /usr/bin/grep -E -n -q -- "$clean_room_mutating_usb_pattern" \
+    "$clean_room_dir/standard_descriptor_reader.m" \
+    "$clean_room_dir/descriptor_model.c" "$clean_room_dir/descriptor_model.h"; then
+    fail "standard descriptor reader references a forbidden mutating or ownership-seizing USB API"
+fi
+/usr/bin/grep -F -q 'options:IOUSBHostObjectInitOptionsNone' \
+    "$clean_room_dir/standard_descriptor_reader.m" || \
+    fail "standard descriptor reader does not visibly use the no-capture/no-seize option"
+if /usr/bin/grep -F -q 'IORegistryEntryCreateCFProperties' \
+    "$clean_room_dir/standard_descriptor_reader.m"; then
+    fail "standard descriptor reader attempts to read the complete registry property set"
 fi
 /usr/bin/xcrun clang \
     -std=c11 \
@@ -205,6 +226,42 @@ clean_room_test_binary="$controller_check_root/clean-room-model-tests"
     "$clean_room_dir/tests/probe_model_tests.c" \
     -o "$clean_room_test_binary" || fail "could not compile clean-room model tests"
 "$clean_room_test_binary" || fail "clean-room model tests failed"
+clean_room_descriptor_test_binary="$controller_check_root/clean-room-descriptor-tests"
+/usr/bin/xcrun clang \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -I "$clean_room_dir" \
+    "$clean_room_dir/descriptor_model.c" \
+    "$clean_room_dir/tests/descriptor_model_tests.c" \
+    -framework IOUSBHost \
+    -o "$clean_room_descriptor_test_binary" || \
+    fail "could not compile clean-room descriptor tests"
+"$clean_room_descriptor_test_binary" || fail "clean-room descriptor tests failed"
+clean_room_descriptor_reader="$controller_check_root/clean-room-standard-descriptor-reader"
+/usr/bin/xcrun clang \
+    -fobjc-arc \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -I "$clean_room_dir" \
+    "$clean_room_dir/standard_descriptor_reader.m" \
+    "$clean_room_dir/descriptor_model.c" \
+    "$clean_room_dir/probe_model.c" \
+    -framework IOUSBHost \
+    -framework IOKit \
+    -framework Foundation \
+    -o "$clean_room_descriptor_reader" || \
+    fail "could not link clean-room standard descriptor reader"
+if /usr/bin/strings "$clean_room_descriptor_reader" | /usr/bin/grep -E -q -- \
+    "$clean_room_mutating_usb_pattern"; then
+    fail "standard descriptor reader binary references a forbidden mutating or ownership-seizing USB API"
+fi
+if "$clean_room_descriptor_reader" >/dev/null 2>&1; then
+    fail "standard descriptor reader ran without its explicit opt-in flag"
+else
+    clean_room_descriptor_usage_status=$?
+    [[ "$clean_room_descriptor_usage_status" == "64" ]] || \
+        fail "standard descriptor reader returned an unexpected no-opt-in status"
+fi
 clean_room_observation_test_binary="$controller_check_root/clean-room-observation-tests"
 /usr/bin/xcrun clang \
     -std=c11 \

@@ -10,6 +10,37 @@ public interface descriptors. It never opens or claims an interface and never
 sends a USB control, bulk, interrupt, or isochronous transfer. It also avoids
 reading or printing the dock serial number.
 
+An additional **opt-in** tool reads the standard USB configuration descriptor
+to report endpoint addresses and packet sizes. It allows only `17e9:4323`,
+refuses to run while candidate interfaces or the device are owned, and opens
+the device with neither capture nor seize options. It may issue the standard
+USB `GET_DESCRIPTOR` request if the descriptor is not already cached. It never
+configures or resets the device, claims an interface, sends a vendor request,
+opens an endpoint, or transfers display data.
+
+First choose **Quit Completely** from DockBridge. Then build and run the reader
+with the explicit opt-in command:
+
+```sh
+make read-descriptors
+```
+
+If DockBridge is running, the command exits safely with an “interfaces are in
+use” message and makes no ownership request.
+
+On the observed revision `3156`, the opt-in reader returned:
+
+```text
+interface 0 alt=0 class=ff/00/03 endpoints=2
+  endpoint 0x02 direction=out type=bulk max-packet=1024
+  endpoint 0x84 direction=in type=bulk max-packet=1024
+interface 1 alt=0 class=fe/01/01 endpoints=0
+```
+
+Both bulk endpoints reported interval zero, one packet per burst, 1024 burst
+bytes, and no USB streams. These are standard descriptor facts, not meanings
+for activation or frame records.
+
 Build and run it with the dock attached:
 
 ```sh

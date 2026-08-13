@@ -21,6 +21,8 @@ The first independent milestone is implemented and tested:
 - recognizes the exact attached USB device, `17e9:4323`;
 - enumerates its public USB interface descriptors through IOKit;
 - identifies interface 0 as the candidate proprietary display transport;
+- confirms its standard descriptors expose bulk OUT `0x02` and bulk IN `0x84`,
+  each with a 1024-byte maximum packet size;
 - leaves standard audio and Ethernet interfaces to macOS;
 - does not read or print the dock serial number;
 - never opens, claims, resets, or writes to a USB interface; and
@@ -38,20 +40,26 @@ make test
 make probe
 ./clean-room/build/dock-probe
 make -C clean-room checker
+make descriptors
 ```
+
+After quitting DockBridge completely, `make read-descriptors` performs an
+explicitly opted-in USB-standard configuration-descriptor read against only
+`17e9:4323`. It reports endpoint addresses and packet sizes without issuing a
+vendor request or opening an endpoint.
 
 The observed descriptor topology is:
 
 | Interface | Public descriptor | Current classification |
 | --- | --- | --- |
-| 0 | vendor class `ff/00/03`, two endpoints | candidate display transport; unopened |
+| 0 | vendor class `ff/00/03`; bulk OUT `0x02` and bulk IN `0x84`; 1024-byte packets | candidate display transport |
 | 1 | application-specific `fe/01/01`, no endpoints | auxiliary interface; unopened |
 | 2–4 | USB audio classes | handled by macOS |
 | 5–6 | USB networking classes | handled by macOS |
 
 A descriptor is not the display protocol. The activation handshake, endpoint
-directions, EDID/head selection, mode setting, frame records, compression,
-damage updates, hotplug, sleep/wake, and error recovery for this exact
+roles beyond standard direction/type, EDID/head selection, mode setting, frame
+records, compression, damage updates, hotplug, sleep/wake, and error recovery for this exact
 DL-3900/Ella revision still need independent documentation and tests.
 
 ## Hardware boundary and corrected test record

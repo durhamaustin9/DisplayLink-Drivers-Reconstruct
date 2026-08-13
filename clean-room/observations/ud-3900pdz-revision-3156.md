@@ -2,8 +2,13 @@
 
 Observation date: 2026-08-13
 
-Status: independently reproduced read-only descriptor fact; no USB interface
-was opened or claimed by the probe and no transfer was sent.
+Status: independently reproduced public descriptor facts. The registry probe
+opened or claimed no USB interface and sent no transfer. The later opt-in
+reader temporarily opened the exact device with no capture or seize option and
+released it immediately. It claimed no interface and performed no configuration,
+reset, vendor request, firmware operation, or endpoint transfer. Apple's API
+may issue a standard USB `GET_DESCRIPTOR` request when the descriptor is not
+cached.
 
 ## Environment
 
@@ -13,6 +18,7 @@ was opened or claimed by the probe and no transfer was sent.
 - Host architecture: Apple silicon, M3 Pro
 - Host operating system: macOS 27 beta
 - Probe: repository `clean-room/dock-probe`
+- Standard reader: repository `clean-room/standard-descriptor-reader`
 
 The observation was reproduced from the same attached hardware by the user and
 the repository maintainer during the session. Device, monitor, and machine
@@ -32,11 +38,25 @@ serial identifiers were deliberately omitted.
 
 The probe reported USB speed code `4` and seven interfaces.
 
+## Candidate endpoint descriptors
+
+After DockBridge reached zero exact processes, the opt-in reader observed the
+standard configuration descriptor and released the device. DockBridge then
+relaunched successfully.
+
+| Interface | Address | Direction | Type | Maximum packet | Interval | Burst | Streams |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | `0x02` | host to device | bulk | 1024 bytes | 0 | one packet / 1024 bytes | 0 |
+| 0 | `0x84` | device to host | bulk | 1024 bytes | 0 | one packet / 1024 bytes | 0 |
+
+Interface 1 declared zero endpoints. The parsed endpoint count exactly matched
+each interface's declared count.
+
 ## What this does not establish
 
-The I/O Registry metadata did not expose endpoint addresses, live transfers,
-activation commands, EDID traffic, mode setting, frame records, compression,
-or recovery behavior. It does not show that the USB-display output produced a
-picture. Those facts require standard descriptor access after the current
-interface owner exits, a host trace on another operating system, or a compatible
-external USB analyzer on the Mac.
+The standard descriptors do not expose live transfers, activation commands,
+EDID traffic, endpoint semantic roles beyond standard direction/type, mode
+setting, frame records, compression, or recovery behavior. They do not show
+that the USB-display output produced a picture. Those facts require a host
+trace on another operating system or a compatible external USB analyzer on the
+Mac.
