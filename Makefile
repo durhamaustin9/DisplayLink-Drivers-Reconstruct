@@ -5,7 +5,7 @@ SOURCE_APP ?= $(CURDIR)/.work/source/DisplayLink Manager.app
 LOCAL_APP ?= $(CURDIR)/build/DisplayLink Local.app
 CORE_APP ?= $(CURDIR)/build/DockBridge Engine.app
 CONTROLLER_APP ?= $(CURDIR)/build/DockBridge.app
-INSTALLED_CONTROLLER_APP ?= $(HOME)/Applications/DockBridge.app
+INSTALLED_CONTROLLER_APP ?= /Applications/DockBridge.app
 
 .PHONY: help test probe test-clean-room prepare local core controller verify verify-local verify-core verify-controller verify-installed integration-local integration-core integration-contained install-contained open-contained tools
 

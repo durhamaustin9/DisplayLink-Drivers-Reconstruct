@@ -142,6 +142,10 @@ rebranding, not a claim that the proprietary engine was rebuilt from source.
 Internal vendor symbols, protocol behavior, firmware, and required legal notices
 remain. macOS still requires and discloses Screen Recording access.
 
+The verified application installs system-wide as `/Applications/DockBridge.app`.
+Only that global copy should be kept installed; duplicate copies under a user's
+`~/Applications` directory can confuse LaunchServices and privacy attribution.
+
 No generated proprietary app is installed by the clean-room probe. On the test
 Mac, the stale `com.displaylink.XpcService` registration that caused the
 “foreign DisplayLink executable” alert was unregistered through its owning app
