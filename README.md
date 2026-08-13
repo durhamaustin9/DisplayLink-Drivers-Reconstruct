@@ -130,7 +130,9 @@ The next stages are gated deliberately:
    disconnects, and long-duration operation.
 
 See [`clean-room/README.md`](clean-room/README.md) and the
-[proposed design](docs/CLEAN-ROOM-DESIGN.md).
+[proposed design](docs/CLEAN-ROOM-DESIGN.md). To contribute externally observed
+facts, use the [controlled collection guide](clean-room/COLLECTION-GUIDE.md);
+never commit a raw USB capture.
 
 ## Retired proprietary containment research
 

@@ -43,6 +43,8 @@ transfer 2 in bulk 84 512
 This example is synthetic and is not a claim about Ella protocol messages.
 Captured payloads, firmware, keys, serial numbers, and screen contents must not
 be committed. Read [PROVENANCE.md](PROVENANCE.md) before adding an observation.
+Follow [COLLECTION-GUIDE.md](COLLECTION-GUIDE.md) for the controlled experiment
+matrix, safe capture options, private storage location, and notes template.
 
 Run all hardware-independent classification and parser tests with:
 
