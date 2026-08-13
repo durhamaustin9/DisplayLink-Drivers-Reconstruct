@@ -1,69 +1,83 @@
-# Proposed independent successor research design
+# Proposed independent macOS USB-display design
 
-Status reviewed: 2026-08-11
+Status reviewed: 2026-08-13
 
-This document proposes a defensible long-term architecture for an independently
-implemented DL-3900/Ella userspace driver. It does not claim that a documented
-two-team clean-room process has occurred, and no such macOS driver is implemented
-in this repository.
+This is a proposed architecture, not a finished driver and not a claim that a
+formal two-team clean-room process has already occurred. The only implemented
+independent component is the read-only descriptor probe in `clean-room/`.
 
-Even a clean implementation would not remove macOS's observation state for
-DisplayLink outputs: a userspace process would still need composited desktop
-pixels.
+## Verified starting point
+
+The attached Plugable UD-3900PDZ exposes USB `17e9:4323`. Public IOKit registry
+properties show a vendor-specific interface 0 (`ff/00/03`, two endpoints), an
+auxiliary interface 1, standard USB audio interfaces, and USB networking
+interfaces. The probe reads those descriptors without opening or claiming an
+interface and deliberately omits device and monitor serials.
+
+This topology is not enough to send pixels. The Ella activation, control,
+head/EDID, mode-setting, frame-record, compression, and recovery protocols need
+independent documentation for this exact hardware revision.
 
 ## Proposed trust boundaries
 
-1. A minimal ScreenCaptureKit producer receives frames and damage metadata from
-   the macOS compositor and intentionally performs no application-level frame
-   persistence. macOS may still swap memory, and the sandbox retains a writable
-   private container.
-2. A bounded Metal or memory-safe CPU codec converts only damaged tiles to an
-   independently implemented DL3 record stream.
-3. A USB-only transport validates every length, endpoint, display index, mode,
-   and device response before sending records to the dock.
-4. No network entitlement, user-file permission, analytics, updater, login item,
-   crash uploader, or remote-control surface exists.
-5. Protocol parsers and the tile codec have corpus, fuzz, malformed-device, and
-   disconnect tests. Builds are reproducible from source.
+1. A minimal ScreenCaptureKit producer receives frames and damage metadata and
+   intentionally persists no frame at application level. macOS may still swap
+   memory and a sandbox retains a writable private container.
+2. A bounded, memory-safe codec converts only damaged tiles to independently
+   implemented records.
+3. A USB transport accepts only exact allowlisted devices and validates every
+   length, endpoint, display index, mode, and response.
+4. Network access, analytics, updater, login item, crash uploader, user-file
+   permission, remote control, and dynamic code loading are absent.
+5. Parsers and codec logic are tested first against a fake dock and fuzzed
+   corpora. Real-hardware writes are disabled until those gates pass.
 
 ## macOS platform boundary
 
-USBDriverKit can provide a strong USB process boundary if Apple grants the
-required transport entitlement, but DriverKit exposes no public third-party
-display-output family for the host desktop. A virtual display currently relies
-on private publication machinery, while the supported userspace pixel source is
-ScreenCaptureKit.
+USBDriverKit can own custom USB endpoints if Apple grants the appropriate
+entitlement. Public DriverKit documentation does not provide a third-party host
+display-output family, however. USB transport alone cannot publish a desktop
+display to WindowServer.
 
-A shipping design must not use private frameworks without an explicit supported
-contract from Apple. A deprecated IOFramebuffer kernel extension would require
-weaker security settings and would not be a security improvement.
+A userspace architecture would need virtual-display publication plus a desktop
+pixel source. ScreenCaptureKit is the public supported pixel source and requires
+Screen Recording approval. The deprecated IOFramebuffer route is not intended
+for third-party drivers and would require weaker system security on Apple
+silicon. Private display frameworks are not a stable or acceptable foundation.
 
-## Protocol research gap
+Therefore a clean implementation can improve transparency and least privilege,
+but it cannot honestly promise USB-graphics HDMI 2/3 without macOS classifying
+and disclosing screen capture. Native HDMI 1/DisplayPort Alt Mode avoids that
+because no application receives the pixels.
 
-As of 2026-08-11, the active open DL3 research project
-[Vino](https://github.com/FireBurn/vino-scripts) targets Linux DRM/KMS and a Dell
-D6000/Ridge device (`17e9:6006`). The tested Plugable dock is DL-3900/Ella
-(`17e9:4323`). Vino does not bind this device or integrate with macOS, and its
-[current handover notes](https://github.com/FireBurn/vino-scripts/blob/main/docs/HANDOVER.md)
-document rendering, performance, hotplug, and power-state limitations. This is
-mutable upstream research, not evidence of support for the Plugable device.
+## State of related open work
 
-Before implementation, an independent team would need documented Ella cold and
-warm activation, endpoint topology, EDID/head selection, control protocol,
-frame records, damage encoding, mode changes, sleep/wake, and hotplug behavior.
-Do not copy proprietary firmware, keys, or implementation code. Review the
-vendor license, HDCP obligations, third-party licenses, and applicable law.
+The previously identified Vino research targeted Linux DRM/KMS and a Dell D6000
+Ridge device (`17e9:6006`), not this Ella device or macOS. Cached July 2026
+material described visible artifacts, low frame rate, and incomplete power/
+hotplug behavior. On 2026-08-13 its former GitHub repository URL returned 404,
+so it is not an available dependency or a support claim for this project.
 
-## Release gates
+Linux EVDI is only a virtual-display component and expects a separate userspace
+transport; it is not a DL-3900 USB protocol implementation for macOS. Old
+libdlo/udl work targets earlier DisplayLink generations.
 
-- memory-safe implementation or comprehensive overflow/bounds checks;
-- exact USB-device allowlist and least-privilege entitlements;
-- no dynamic code loading or writable executable resources;
-- fuzzed USB descriptor, control, and video parsers;
-- bounded pixel-buffer pools with no intentional application-level frame
-  persistence;
-- automated runtime evidence of zero process-owned IP sockets;
-- exact-hardware cold boot, both outputs, supported modes, hotplug storms,
-  logout, and repeated sleep/wake tests; and
-- clear user disclosure that the macOS Screen Recording grant and observation
-  indicator remain required.
+## Research and release gates
+
+- record only protocol facts legally obtained for interoperability;
+- copy no proprietary code, firmware, resource, key, or protected-media secret;
+- preserve provenance for every protocol fact and independently authored file;
+- use an exact VID:PID/revision allowlist and never flash firmware;
+- fuzz descriptors, control replies, frame records, and disconnect paths;
+- bound memory, dimensions, tile counts, transfer lengths, and timeouts;
+- verify cold boot, both USB outputs, supported modes, hotplug storms, malformed
+  responses, logout, and repeated sleep/wake;
+- demonstrate reproducible builds and zero process-owned IP sockets; and
+- disclose Screen Recording permission and observation UI accurately.
+
+Apple documentation:
+
+- [DriverKit](https://developer.apple.com/documentation/driverkit)
+- [USBDriverKit](https://developer.apple.com/documentation/usbdriverkit)
+- [ScreenCaptureKit capture sample](https://developer.apple.com/documentation/screencapturekit/capturing-screen-content-in-macos)
+- [IOFramebuffer](https://developer.apple.com/documentation/kernel/ioframebuffer)

@@ -2,10 +2,15 @@
 
 ## Project boundary
 
-This repository is a local containment and audit toolkit. It does not replace
-or make the proprietary DisplayLink rendering executable auditable. Its primary
-control is macOS App Sandbox enforcement after removing direct client/server
-network entitlements from an exact, pinned vendor input.
+The active project is original, read-only clean-room hardware research. Its
+current probe uses public IOKit registry APIs, does not load vendor code, does
+not open a USB interface, and does not send bytes to the dock. It is not yet a
+functional display driver.
+
+The repository also retains a historical local containment/audit toolkit. That
+toolkit does not replace or make the proprietary DisplayLink rendering
+executable auditable. Its primary control was macOS App Sandbox enforcement
+after removing direct client/server network entitlements from a pinned input.
 
 The source-only repository intentionally contains no vendor package, executable,
 firmware, generated application, signing certificate, or captured display data.
@@ -77,11 +82,12 @@ corruption, a system crash, or power loss. Use exact executable paths when
 investigating an interrupted shutdown; reboot rather than broadly terminating
 ambiguous processes.
 
-The standalone Local engine and the final Core-contained app each completed the
-separate narrow hardware observations described in the README. The final app
-also completed two dock-connected launch/reopen/quit cycles and a fail-closed
-foreign-helper test. These brief results do not qualify other hardware,
-sleep/wake, hotplug, cold boot, simultaneous outputs, or long-duration use.
+The final controller completed two launch/reopen/quit cycles and a fail-closed
+foreign-helper test. Those tests establish lifecycle behavior only. The later
+144 Hz external-display observation was reproduced with zero DisplayLink
+processes and no installed wrapper, so it was a native display route and is not
+evidence that Core drove USB graphics. No independent USB-display output has
+been qualified.
 
 ## Non-goals
 

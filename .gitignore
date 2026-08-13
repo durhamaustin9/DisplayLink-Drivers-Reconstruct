@@ -49,6 +49,7 @@ artifacts/
 vendor/
 expanded/
 tools/build/
+clean-room/build/
 .displaylink-local.*/
 .displaylink-core.*/
 .displaylink-source.*/

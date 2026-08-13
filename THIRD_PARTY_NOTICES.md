@@ -1,8 +1,9 @@
 # Third-party software and trademarks
 
-This repository contains independently written audit and build tooling only.
-It does not distribute DisplayLink Manager, DisplayLink firmware, vendor
-resources, or a prebuilt or modified application.
+This repository contains independently written clean-room probe, audit, and
+build-tool source only. The clean-room probe does not use DisplayLink software.
+The repository does not distribute DisplayLink Manager, DisplayLink firmware,
+vendor resources, or a prebuilt or modified application.
 
 You must obtain DisplayLink Manager from Synaptics and review the license
 included with that download. The repository's MIT License applies only to the

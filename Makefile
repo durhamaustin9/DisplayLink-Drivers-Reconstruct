@@ -7,12 +7,17 @@ CORE_APP ?= $(CURDIR)/build/DisplayLink Core.app
 CONTROLLER_APP ?= $(CURDIR)/build/DisplayLink Contained.app
 INSTALLED_CONTROLLER_APP ?= $(HOME)/Applications/DisplayLink Contained.app
 
-.PHONY: help test prepare local core controller verify verify-local verify-core verify-controller verify-installed integration-local integration-core integration-contained install-contained open-contained tools
+.PHONY: help test probe test-clean-room prepare local core controller verify verify-local verify-core verify-controller verify-installed integration-local integration-core integration-contained install-contained open-contained tools
 
 help:
+	@echo "Independent, read-only hardware work (no DisplayLink software):"
+	@echo "  make probe"
+	@echo "  make test-clean-room"
+	@echo
 	@echo "Source-only checks:"
 	@echo "  make test"
 	@echo
+	@echo "Legacy proprietary containment research (retained for auditability):"
 	@echo "Prepare a pinned vendor input without installing it:"
 	@echo '  make prepare PKG="/path/to/DisplayLink...pkg"'
 	@echo
@@ -29,6 +34,12 @@ help:
 
 test:
 	./scripts/check-repository
+
+probe:
+	$(MAKE) -C clean-room probe
+
+test-clean-room:
+	$(MAKE) -C clean-room test
 
 prepare:
 	@if [[ -d "$(SOURCE_APP)" ]]; then \
