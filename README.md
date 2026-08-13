@@ -146,6 +146,14 @@ The verified application installs system-wide as `/Applications/DockBridge.app`.
 Only that global copy should be kept installed; duplicate copies under a user's
 `~/Applications` directory can confuse LaunchServices and privacy attribution.
 
+If DockBridge displays **DockBridge Stopped Safely**, its exact engine has
+already reached a verified zero-process state; there is no remaining session to
+quit. **No Active Sessions** likewise means it is stopped. Reopen the global app
+to start a new supervised session. The controller ignores unrelated or
+other-user processes whose paths macOS does not expose, but still stops safely
+when an unresolved same-user process has a recognized USB-display executable
+name.
+
 No generated proprietary app is installed by the clean-room probe. On the test
 Mac, the stale `com.displaylink.XpcService` registration that caused the
 “foreign DisplayLink executable” alert was unregistered through its owning app

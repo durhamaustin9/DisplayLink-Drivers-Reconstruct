@@ -104,6 +104,49 @@ static NSString *DLProcessPath(pid_t pid)
     return canonical ?: reported.stringByStandardizingPath;
 }
 
+static NSString *DLBoundedProcessName(const char *bytes, size_t capacity)
+{
+    if (bytes == NULL || capacity == 0) {
+        return nil;
+    }
+    size_t length = strnlen(bytes, capacity);
+    if (length == 0) {
+        return nil;
+    }
+    return [[NSString alloc] initWithBytes:bytes
+                                   length:length
+                                 encoding:NSUTF8StringEncoding];
+}
+
+static BOOL DLUnresolvedProcessCouldBeUSBDisplayProcess(
+    pid_t pid, NSString **processName)
+{
+    struct proc_bsdinfo information = { 0 };
+    int size = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0,
+        &information, (int)sizeof(information));
+    if (size != (int)sizeof(information)) {
+        return NO;
+    }
+
+    /* A different user's inaccessible process cannot be one of this
+       controller's per-user engines or legacy GUI agents. */
+    if (information.pbi_uid != getuid()) {
+        return NO;
+    }
+
+    NSString *name = DLBoundedProcessName(
+        information.pbi_name, sizeof(information.pbi_name));
+    if (name.length == 0) {
+        name = DLBoundedProcessName(
+            information.pbi_comm, sizeof(information.pbi_comm));
+    }
+    if (processName != NULL) {
+        *processName = name;
+    }
+    return name.length != 0 && dl_name_is_known_displaylink_executable(
+        name.fileSystemRepresentation);
+}
+
 static BOOL DLPathIsExactMain(NSString *engineRoot, NSString *candidate)
 {
     if (engineRoot.length == 0 || candidate.length == 0) {
@@ -265,15 +308,46 @@ static DLForeignProcessScanResult DLScanForForeignDisplayLinkProcesses(
         pid_t pid = number.intValue;
         NSString *path = DLProcessPath(pid);
         if (path == nil) {
+            NSString *processName = nil;
+            if (!DLUnresolvedProcessCouldBeUSBDisplayProcess(pid, &processName)) {
+                /* Process enumeration races are routine, and macOS may withhold
+                   paths for unrelated processes. Only a same-user process with
+                   a recognized USB-display name is relevant to this scan. */
+                continue;
+            }
+
+            /* A relevant process may be between exec and a stable path. Retry
+               briefly before refusing to proceed. */
+            for (NSUInteger attempt = 0; attempt < 3 && path == nil; ++attempt) {
+                struct timespec delay = { .tv_sec = 0, .tv_nsec = 5000000L };
+                (void)nanosleep(&delay, NULL);
+                path = DLProcessPath(pid);
+            }
+            if (path != nil) {
+                if ([path isEqualToString:controllerExecutable] ||
+                    DLPathIsExactMain(engineRoot, path) ||
+                    !dl_path_is_known_displaylink_executable(
+                        path.fileSystemRepresentation)) {
+                    continue;
+                }
+                if (detail != NULL) {
+                    *detail = [NSString stringWithFormat:
+                        @"A legacy USB-display executable is running (PID %d, %@). Stop the "
+                         "other USB-display build first; this controller will not adopt, stop, "
+                         "or signal it.", pid, path];
+                }
+                return DLForeignProcessScanResultFound;
+            }
+
             errno = 0;
             if (kill(pid, 0) == -1 && errno == ESRCH) {
                 continue;
             }
             if (detail != NULL) {
                 *detail = [NSString stringWithFormat:
-                    @"The executable path for live PID %d could not be resolved while "
-                     "checking for legacy USB-display executables. No process was signaled.",
-                    pid];
+                    @"The executable path for same-user USB-display process %@ (PID %d) "
+                     "could not be resolved after retrying. No process was signaled.",
+                    processName ?: @"(unknown)", pid];
             }
             return DLForeignProcessScanResultUncertain;
         }
@@ -1144,8 +1218,11 @@ static DLCleanupResult *DLPerformCleanup(NSString *engineRoot,
         if (self.fatalAfterCleanup.length != 0) {
             NSString *message = self.fatalAfterCleanup;
             self.fatalAfterCleanup = nil;
-            [self showAlertWithTitle:@"DockBridge Could Not Continue"
-                             message:message
+            NSString *stoppedMessage = [message stringByAppendingString:
+                @"\n\nDockBridge has stopped completely; there is no remaining "
+                 "DockBridge session to quit."];
+            [self showAlertWithTitle:@"DockBridge Stopped Safely"
+                             message:stoppedMessage
                               button:@"Close"];
             exit(EXIT_FAILURE);
         }

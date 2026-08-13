@@ -66,10 +66,13 @@ launchd helper and never unloads or mutates a global DisplayLink job. It reports
 shutdown as complete only after read-only checks find no known DisplayLink XPC
 or crash-restart registration and repeated scans prove the bound identity, all
 exact nested processes, and all foreign DisplayLink main/helper processes are
-gone. PID reuse, a path change, uncertain process or registration inspection,
-or a foreign DisplayLink application/helper causes refusal. The owning official
-or Local installation must unregister its own background items; the controller
-does not cross that ownership boundary.
+gone. PID reuse, a bound-engine path change, uncertain service registration, an
+unresolved same-user process with a recognized USB-display executable name, or
+a foreign DisplayLink application/helper causes refusal. An unrelated or
+other-user process with a macOS-withheld path is ignored; process-list races and
+protected system processes are normal and are not evidence of a USB-display
+conflict. The owning official or Local installation must unregister its own
+background items; the controller does not cross that ownership boundary.
 
 The controller supplies the DockBridge status item and **Quit Completely**
 action. The vendor status item is requested off through launch preferences.

@@ -98,3 +98,20 @@ bool dl_path_is_known_displaylink_executable(const char *candidate)
     return strcmp(basename, "CrashRestartHelper") == 0 &&
         dl_parent_path_has_displaylink_component(candidate, basename_separator);
 }
+
+bool dl_name_is_known_displaylink_executable(const char *candidate)
+{
+    if (candidate == NULL || candidate[0] == '\0') {
+        return false;
+    }
+
+    /*
+     * proc_bsdinfo may truncate a command name. DisplayLink's executable names
+     * all retain this distinctive prefix when truncated. CrashRestartHelper is
+     * intentionally excluded here because that generic name is also used by
+     * unrelated products; it is recognized only when its resolved path has a
+     * DisplayLink parent component.
+     */
+    return strcmp(candidate, "DockBridgeEngine") == 0 ||
+        strncmp(candidate, "DisplayLink", sizeof("DisplayLink") - 1U) == 0;
+}

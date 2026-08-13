@@ -50,5 +50,15 @@ int main(void)
         "relative/DisplayLinkUserAgent"));
     assert(!dl_path_is_known_displaylink_executable("/"));
     assert(!dl_path_is_known_displaylink_executable(NULL));
+
+    assert(dl_name_is_known_displaylink_executable("DockBridgeEngine"));
+    assert(dl_name_is_known_displaylink_executable("DisplayLinkUserAgent"));
+    assert(dl_name_is_known_displaylink_executable("DisplayLinkUser"));
+    assert(dl_name_is_known_displaylink_executable("DisplayLinkXpcSe"));
+    assert(!dl_name_is_known_displaylink_executable("CrashRestartHelper"));
+    assert(!dl_name_is_known_displaylink_executable("OtherVendorAgent"));
+    assert(!dl_name_is_known_displaylink_executable("EvilDisplayLinkUserAgent"));
+    assert(!dl_name_is_known_displaylink_executable(""));
+    assert(!dl_name_is_known_displaylink_executable(NULL));
     return 0;
 }
