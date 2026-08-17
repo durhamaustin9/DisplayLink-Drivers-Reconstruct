@@ -2,7 +2,7 @@
 
 This directory contains original source code and uses public macOS IOKit APIs.
 It does not include, load, modify, or call DisplayLink software, firmware, keys,
-or protocol implementation code.
+or copied vendor protocol implementation code.
 
 The current milestone is deliberately read-only. `dock-probe` finds the exact
 USB identity observed for a Plugable UD-3900PDZ (`17e9:4323`) and reports its
@@ -17,6 +17,10 @@ per burst, and no streams. Its queues are bounded and live only in memory. It
 does not link IOKit or IOUSBHost, enumerate a device, or contain a real-hardware
 transport kind.
 
+The queue's 1024-byte storage unit is a bounded synthetic chunk, not a maximum
+host-transfer claim. Metadata-only replay splits larger observed transfer
+lengths across chunks and does not preserve or reconstruct their bodies.
+
 Run the simulator with:
 
 ```sh
@@ -29,6 +33,28 @@ is an intentional hard barrier: the state machine has no call to the transport
 write function, and its test requires both attempted and successful write
 counters to remain zero. Synthetic inbound packets can be injected into the
 fake dock for future parser tests, but no protocol payload has been invented.
+
+A separate parser now validates only the provisional structure and ordered
+direction/length shape of the first observed data-bearing burst at the USB
+boundary. Exercise it with:
+
+```sh
+make exchange-lab
+```
+
+The lab creates deterministic nonzero synthetic transfers, sends them only
+through the in-memory fake transport, and requires the parser to reach
+`complete` after 15 ordered transfers. It validates the provisional four-byte
+IN length prefix and OUT length alignment without assigning any other field or
+command meaning. It has no real-device transport. The fixture is provisional
+pending two more matching native Windows cold-start captures. The reviewed
+facts and capture limitations are recorded in
+[`observations/windows-native-usbpcap-cold-2026-08-17.md`](observations/windows-native-usbpcap-cold-2026-08-17.md).
+
+The parser accepts the endpoint address with every transfer and rejects
+anything other than bulk OUT `0x02` or bulk IN `0x84`. Any future capture or
+hardware integration must additionally bind it to the already verified
+`17e9:4323`, revision `0x3156`, interface-0 topology before supplying data.
 
 An additional **opt-in** tool reads the standard USB configuration descriptor
 to report endpoint addresses and packet sizes. It allows only `17e9:4323`,
@@ -96,6 +122,12 @@ Fake replay uses only zero-filled synthetic chunks in the memory transport;
 control transfers are not replayed. Read
 [`ACTIVATION-ENVELOPE.md`](ACTIVATION-ENVELOPE.md) for the grammar, bounds, and
 criteria for turning three private observations into a reviewed public fact.
+The first repeated transport-lifetime facts are recorded in
+[`observations/windows-arm64-parallels-etw-2026-08-14.md`](observations/windows-arm64-parallels-etw-2026-08-14.md).
+Those trials produced sustained HDMI 2 output at 1920×1080/60 Hz, but no human
+timestamp was recorded. Their private envelopes therefore label 15 seconds as
+a conservative observer-reported `output-stable` upper bound rather than an
+exact activation latency. All three pass the parser and zero-filled fake replay.
 
 The version-one text format is:
 

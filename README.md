@@ -5,7 +5,7 @@ UD-3900PDZ** dock, plus a retained audit of DisplayLink Manager 16.2.39.
 
 > [!IMPORTANT]
 > The independent code in `clean-room/` is not yet a display driver. It is a
-> read-only hardware probe, an offline metadata parser, and an in-memory fake
+> read-only hardware probe, offline structural parsers, and an in-memory fake
 > transport/state machine. None loads DisplayLink software or sends protocol
 > bytes to the dock. This
 > repository is not an open-source DisplayLink driver and is not yet a
@@ -26,12 +26,16 @@ The first independent milestone is implemented and tested:
   each with a 1024-byte maximum packet size;
 - leaves standard audio and Ethernet interfaces to macOS;
 - does not read or print the dock serial number;
-- never opens, claims, resets, or writes to a USB interface; and
-- uses no DisplayLink executable, library, firmware, resource, or protocol code;
-- validates a bounded, metadata-only observation format offline; and
+- never opens, claims, resets, or writes to a USB interface;
+- uses no vendor executable, library, firmware, resource, or copied protocol
+  implementation;
+- validates a bounded, metadata-only observation format offline;
 - rejects raw payload fields, oversized transfers, out-of-order records, and
   non-allowlisted USB devices;
-- models `0x02`/`0x84` with bounded, in-memory packet queues; and
+- models `0x02`/`0x84` with bounded, in-memory packet queues;
+- validates the 15-transfer shape of the first observed data-bearing burst
+  using synthetic transfers, without interpreting bytes beyond the provisional
+  IN length prefix; and
 - stops its device state machine at a protocol-undocumented gate with zero
   attempted writes.
 
@@ -46,19 +50,33 @@ make probe
 make -C clean-room checker
 make descriptors
 make fake-lab
+make exchange-lab
 make activation-check
 ```
 
 `make fake-lab` is hardware-independent. Its executable links no IOKit or
 IOUSBHost framework and cannot open the dock. It validates the exact observed
 identity/topology, then deliberately refuses activation because no independently
-documented message exists yet.
+established activation command or message meaning exists yet.
 
 `make activation-check` builds a separate metadata-only activation-envelope
 parser and fake replay. The replay turns transfer lengths into zero-filled
-synthetic packets; it never consumes or stores captured payload bytes. No real
-activation exchange is claimed yet because no external capture has been
-provided. See the [activation envelope specification](clean-room/ACTIVATION-ENVELOPE.md).
+synthetic packets; it never consumes or stores captured payload bytes. Three
+external Windows ARM64 guest trials now validate with a conservative 15-second
+visible-output upper bound. This documents transfer shape, not payload format,
+command meaning, or exact activation latency. See the
+[activation envelope specification](clean-room/ACTIVATION-ENVELOPE.md).
+
+`make exchange-lab` exercises a provisional first-burst parser entirely
+against the fake transport. A native Windows USBPcap cold trial observed the
+15-transfer direction/length shape and two provisional structural patterns:
+payload-bearing IN transfers had a bounded four-byte length envelope, and all
+observed OUT transfer lengths were positive and 16-byte aligned. The lab
+constructs fresh deterministic nonzero synthetic bodies; it contains no captured message,
+key, firmware, or screen data. The real-device
+state machine remains blocked because one payload-bearing cold trial is not
+enough to classify dynamic fields or establish command meanings. See the
+[sanitized cold-start observation](clean-room/observations/windows-native-usbpcap-cold-2026-08-17.md).
 
 After quitting DockBridge completely, `make read-descriptors` performs an
 explicitly opted-in USB-standard configuration-descriptor read against only
@@ -90,7 +108,8 @@ DL-3900/Ella revision still need independent documentation and tests.
 | macOS | macOS 27 beta |
 | Attached display | HP Z27H, reported at 1920×1080/144 Hz on 2026-08-13 |
 | Independent probe | Device and seven interface descriptors found read-only |
-| Independent USB video | Not implemented or demonstrated |
+| Independent clean-room USB video | Not implemented or demonstrated |
+| External black-box USB video | HDMI 2, 1920×1080/60 Hz; three Windows ARM64 guest trials plus one native Windows USBPcap cold start |
 
 An earlier version of this README incorrectly treated the 144 Hz external
 display as proof that the experimental Core derivative was driving HDMI 2/3.
@@ -145,8 +164,8 @@ Apple references:
 The next stages are gated deliberately:
 
 1. preserve public USB descriptors for this exact hardware without identifiers;
-2. collect three legally obtained black-box activation trials and validate their
-   metadata with the implemented activation-envelope parser;
+2. preserve the three validated black-box activation-window envelopes and
+   reproduce their conservative timing bound on a native host or analyzer;
 3. turn only stable, reviewed Ella facts into bounded parsers, corpus tests, and
    fuzz targets on the implemented fake transport/state skeleton;
 4. prove cold/warm activation and mode selection without copying firmware,

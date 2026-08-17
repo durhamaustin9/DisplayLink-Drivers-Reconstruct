@@ -54,9 +54,14 @@ each interface's declared count.
 
 ## What this does not establish
 
-The standard descriptors do not expose live transfers, activation commands,
-EDID traffic, endpoint semantic roles beyond standard direction/type, mode
-setting, frame records, compression, or recovery behavior. They do not show
-that the USB-display output produced a picture. Those facts require a host
-trace on another operating system or a compatible external USB analyzer on the
-Mac.
+The standard descriptors alone do not expose live transfers, activation
+commands, EDID traffic, endpoint semantic roles beyond standard direction/type,
+mode setting, frame records, compression, or recovery behavior. A later
+[Windows ARM64 guest ETW observation](windows-arm64-parallels-etw-2026-08-14.md)
+confirmed repeated traffic and visible output on the two candidate endpoints,
+but it does not reveal payload format or command meaning and is not a physical
+Mac-bus trace. A later
+[native Windows USBPcap cold-start observation](windows-native-usbpcap-cold-2026-08-17.md)
+captured one complete first data-bearing burst and provisional structural
+patterns; later activation phases remain uninterpreted, and the trace does not
+establish command semantics.

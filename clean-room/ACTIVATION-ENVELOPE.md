@@ -1,7 +1,11 @@
 # Activation exchange metadata envelope
 
-Status: parser and fake replay implemented; no real activation capture has been
-provided or documented yet.
+Status: parser and fake replay implemented. One Windows-on-ARM Parallels USB ETW
+capture containing three intentional reconnect trials has been reviewed. Typed
+endpoint and transfer metadata is reproducible. Three private envelopes now
+validate and replay through the fake transport using a conservative 15-second
+observer-reported `output-stable` upper bound. This is not an exact activation
+latency or evidence of message semantics.
 
 This format records the externally observable *shape* of one activation trial
 without recording USB payload bytes, control-request setup fields, keys,
@@ -43,10 +47,15 @@ The example values are synthetic placeholders, not observations.
 - No payload field exists. An added field causes rejection.
 - An envelope is incomplete unless at least one transfer occurs between
   `action-issued` and `output-stable`.
+- `output-stable` may be an exact logged observation or a conservative upper
+  bound supplied by the observer. A bound must be labeled in adjacent private
+  comments and must never be reported as exact latency.
 
 The parser stores at most 4,096 events, accepts at most 16 MiB for one transfer,
-and caps the activation-window byte total at 64 MiB. These are parser safety
-bounds, not claims about what the dock accepts.
+and caps the activation-window byte total at 80 MiB. These are parser safety
+bounds, not claims about what the dock accepts. The total was raised from 64
+MiB only after the conservative 15-second observation window exceeded it by
+about one MiB; replay remains chunked through the bounded in-memory transport.
 
 ## Validate and replay safely
 
@@ -95,5 +104,7 @@ The first real exchange is documented only when:
 7. no command meaning is claimed without a controlled comparison that supports
    it.
 
-Until then, the state-machine activation barrier remains unchanged and real
-hardware writes remain absent.
+The three 2026-08-14 guest trials satisfy the metadata parsing and fake-replay
+portion with a conservative stability bound. The state-machine activation
+barrier nevertheless remains unchanged: no payload structure or command
+meaning has been established, and real hardware writes remain absent.

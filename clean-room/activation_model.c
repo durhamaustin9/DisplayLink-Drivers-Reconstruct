@@ -307,14 +307,15 @@ db_activation_parse(FILE *input, DBActivationEnvelope *envelope,
                     "transfer is outside endpoint/type allowlist");
                 return DB_ACTIVATION_FORMAT_ERROR;
             }
-            if (parsed.activation_total_bytes >
-                DB_ACTIVATION_MAX_TOTAL_BYTES - (size_t)transfer_length) {
-                set_error(error, error_capacity, line_number,
-                    "activation byte total exceeds configured bound");
-                return DB_ACTIVATION_BOUNDS_ERROR;
-            }
             ++parsed.transfer_count;
             if (activation_window) {
+                if (parsed.activation_total_bytes >
+                    DB_ACTIVATION_MAX_TOTAL_BYTES -
+                        (size_t)transfer_length) {
+                    set_error(error, error_capacity, line_number,
+                        "activation byte total exceeds configured bound");
+                    return DB_ACTIVATION_BOUNDS_ERROR;
+                }
                 ++parsed.activation_transfer_count;
                 parsed.activation_total_bytes += (size_t)transfer_length;
             }

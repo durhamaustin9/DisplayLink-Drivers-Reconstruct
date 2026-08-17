@@ -19,7 +19,12 @@ In order of fidelity:
 2. Use a separate Linux test machine with the official driver and Linux
    `usbmon`. This captures host-controller requests rather than physical bus
    transactions, but it is suitable for discovering transfer structure.
-3. Use a separate Windows test machine with Wireshark and USBPcap.
+3. Use a separate Windows test machine with Wireshark and USBPcap. On Windows
+   on ARM, where USBPcap's kernel driver may be unavailable, use Microsoft's
+   built-in USB ETW providers and retain the original `.etl` file. A Parallels
+   guest observes virtual host-controller requests rather than the physical Mac
+   USB bus, so record that boundary and confirm important facts later with a
+   native host or hardware analyzer.
 
 Do not disable System Integrity Protection on the primary Mac just to obtain a
 software capture. A trace from another operating system is not automatically a
@@ -113,10 +118,26 @@ device address changes after reconnecting, record the new address in the notes.
 request. Preserve both and their shared request identifier. Do not deduplicate
 or reinterpret them manually.
 
+## Windows USB ETW collection
+
+Windows 11 includes `logman` and the Microsoft USB ETW providers on ARM64, so
+this route does not require USBPcap. Use the `HeadersBusTrace` keyword for this
+project: Microsoft documents that it records transfer events without saving
+data packets. Do not use `PartialDataBusTrace` or `FullDataBusTrace` for a new
+clean-room trial because those modes retain payload bytes that this project
+does not need.
+
+Keep each trace short, record exactly one action, and preserve the original
+`.etl`. A CSV export is suitable for an event-count sanity check but may flatten
+typed fields. When that happens, also produce a private XML dump and interpreted
+event/schema exports with the built-in `tracerpt` tool. These files remain raw
+private evidence; they are not publication artifacts.
+
 ## Private storage and handoff
 
-Raw `.pcap`, `.pcapng`, analyzer exports, and derived `.dbobs` files must never
-be committed or attached to a public issue. Create a local ignored session:
+Raw `.pcap`, `.pcapng`, `.etl`, ETW CSV/XML exports, analyzer exports, and
+derived `.dbobs` files must never be committed or attached to a public issue.
+Create a local ignored session:
 
 ```sh
 mkdir -p observations-private/session-A
@@ -149,6 +170,10 @@ metadata into `observations-private/<session>/activation.dba` using
 [`ACTIVATION-ENVELOPE.md`](ACTIVATION-ENVELOPE.md). Capture-relative action and
 visible-stability timestamps must come from the session log; do not infer them
 from packet contents. Validate and exercise the shape in memory with:
+
+If an exact stability time was not logged, an observer-reported conservative
+upper bound may be used only when the envelope comments and public summary say
+that it is a bound. Never present it as measured latency.
 
 ```sh
 make activation-check

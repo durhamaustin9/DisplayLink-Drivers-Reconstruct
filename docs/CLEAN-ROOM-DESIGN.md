@@ -1,21 +1,29 @@
 # Proposed independent macOS USB-display design
 
-Status reviewed: 2026-08-13
+Status reviewed: 2026-08-17
 
 This is a proposed architecture, not a finished driver and not a claim that a
 formal two-team clean-room process has already occurred. The only implemented
-independent components are the read-only descriptor probe, the bounded
-metadata-only observation parser, and an in-memory fake transport with a
-protocol-gated device state machine in `clean-room/`. The parser is protocol
-agnostic and carries no captured vendor payload.
+independent components are the read-only descriptor probe, bounded offline
+observation parsers, a provisional first-burst structural parser, and an
+in-memory fake transport with a protocol-gated device state machine in
+`clean-room/`. None carries a captured vendor payload.
 
 An activation-envelope parser is also implemented. It can represent an
 externally observed cold-connect or warm-start interval using monotonic event
 timestamps plus control/bulk direction, endpoint, and length metadata. It
 rejects payload fields and semantic command labels. Its fake replay constructs
 only zero-filled chunks; endpoint-zero control records remain unreplayed. No
-real activation exchange has been provided yet, so the implementation is an
-evidence-processing skeleton rather than an activation protocol.
+captured payload enters that parser or replay.
+
+A native Windows USBPcap cold trial now establishes one first-burst
+direction/length shape plus two provisional structural patterns: payload-
+bearing IN transfers use a four-byte length envelope in that trace, and every
+observed OUT declaration is positive and 16-byte aligned. The parser validates
+only that shape using source-authored synthetic bodies. It does not identify an
+activation command, interpret a body field, or enable a real transport. Two
+matching cold trials are still required before stable and variable fields can
+be classified.
 
 ## Verified starting point
 
@@ -34,8 +42,16 @@ This topology is not enough to send pixels. The Ella activation, control,
 head/EDID, mode-setting, frame-record, compression, and recovery protocols need
 independent documentation for this exact hardware revision.
 
+The sanitized
+[native Windows USBPcap observation](../clean-room/observations/windows-native-usbpcap-cold-2026-08-17.md)
+records the first data-bearing burst and its capture limits. It is black-box
+evidence, not a semantic protocol specification.
+
 The implemented fake transport models the two endpoint directions with
-eight-entry, 1024-byte bounded queues. The current state machine accepts only
+eight-entry queues containing at most 1024 bytes per synthetic chunk. That is
+an implementation bound, not a claim that host bulk transfers are limited to
+one USB maximum packet; larger metadata-only transfers are deliberately split
+for fake replay. The current state machine accepts only
 the exact observed VID, PID, revision, interface classes, endpoints, packet
 sizes, burst counts, and stream counts. It exposes no real transport type and
 stops activation at `blocked-protocol-undocumented`. The state-machine source

@@ -9,8 +9,8 @@ main(void)
 {
     DBFakeTransport fake = {0};
     DBTransport transport = {0};
-    uint8_t source[DB_FAKE_MAX_PACKET_SIZE + 1U] = {0};
-    uint8_t destination[DB_FAKE_MAX_PACKET_SIZE] = {0};
+    uint8_t source[DB_FAKE_MAX_CHUNK_SIZE + 1U] = {0};
+    uint8_t destination[DB_FAKE_MAX_CHUNK_SIZE] = {0};
     size_t length = 0;
 
     db_fake_transport_initialize(&fake, &transport);

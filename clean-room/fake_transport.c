@@ -14,7 +14,7 @@ queue_push(DBFakeQueue *queue, const uint8_t *bytes, size_t length)
     if (queue == NULL || bytes == NULL || length == 0) {
         return DB_TRANSPORT_INVALID_ARGUMENT;
     }
-    if (length > DB_FAKE_MAX_PACKET_SIZE) {
+    if (length > DB_FAKE_MAX_CHUNK_SIZE) {
         return DB_TRANSPORT_PACKET_TOO_LARGE;
     }
     if (queue->count >= DB_FAKE_QUEUE_CAPACITY) {

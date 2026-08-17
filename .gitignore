@@ -72,8 +72,11 @@ clean-room/build/
 # Logs, captures, crash reports, and local state
 *.log
 *.trace
+*.etl
 *.pcap
 *.pcapng
+usbtrace*.csv
+usbtrace*.xml
 *.dbobs
 *.dba
 captures/

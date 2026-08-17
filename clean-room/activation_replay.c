@@ -9,7 +9,7 @@ replay_chunk(DBTransport *transport, DBFakeTransport *fake,
     const DBActivationTransfer *transfer, const uint8_t *synthetic,
     size_t length)
 {
-    uint8_t received[DB_FAKE_MAX_PACKET_SIZE] = {0};
+    uint8_t received[DB_FAKE_MAX_CHUNK_SIZE] = {0};
     size_t received_length = 0;
     DBTransportResult result;
 
@@ -51,7 +51,7 @@ db_activation_replay_fake(const DBActivationEnvelope *envelope,
     DBFakeTransport fake = {0};
     DBTransport transport = {0};
     DBActivationReplayReport replayed = {0};
-    uint8_t synthetic[DB_FAKE_MAX_PACKET_SIZE] = {0};
+    uint8_t synthetic[DB_FAKE_MAX_CHUNK_SIZE] = {0};
     db_fake_transport_initialize(&fake, &transport);
     if (db_transport_open(&transport) != DB_TRANSPORT_OK) {
         return DB_ACTIVATION_REPLAY_TRANSPORT_ERROR;

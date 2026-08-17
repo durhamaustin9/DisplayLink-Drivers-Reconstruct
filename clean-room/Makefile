@@ -6,14 +6,16 @@ CHECKER := $(BUILD_DIR)/transcript-check
 ACTIVATION_CHECKER := $(BUILD_DIR)/activation-check
 DESCRIPTOR_READER := $(BUILD_DIR)/standard-descriptor-reader
 FAKE_LAB := $(BUILD_DIR)/fake-dock-lab
+EXCHANGE_LAB := $(BUILD_DIR)/exchange-lab
 PROBE_TEST := $(BUILD_DIR)/probe-model-tests
 OBSERVATION_TEST := $(BUILD_DIR)/observation-model-tests
 DESCRIPTOR_TEST := $(BUILD_DIR)/descriptor-model-tests
 FAKE_TRANSPORT_TEST := $(BUILD_DIR)/fake-transport-tests
 STATE_MACHINE_TEST := $(BUILD_DIR)/state-machine-tests
 ACTIVATION_TEST := $(BUILD_DIR)/activation-model-tests
+EXCHANGE_TEST := $(BUILD_DIR)/exchange-parser-tests
 
-.PHONY: all probe checker activation-check descriptors fake-lab test clean
+.PHONY: all probe checker activation-check descriptors fake-lab exchange-lab test clean
 
 all: probe checker
 
@@ -45,6 +47,11 @@ fake-lab: $(FAKE_LAB)
 $(FAKE_LAB): fake_dock_lab.c state_machine.c state_machine.h fake_transport.c fake_transport.h transport.c transport.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) fake_dock_lab.c state_machine.c fake_transport.c transport.c -o "$@"
 
+exchange-lab: $(EXCHANGE_LAB)
+
+$(EXCHANGE_LAB): exchange_lab.c exchange_parser.c exchange_parser.h fake_transport.c fake_transport.h transport.c transport.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) exchange_lab.c exchange_parser.c fake_transport.c transport.c -o "$@"
+
 $(PROBE_TEST): tests/probe_model_tests.c probe_model.c probe_model.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) tests/probe_model_tests.c probe_model.c -o "$@"
 
@@ -63,13 +70,18 @@ $(STATE_MACHINE_TEST): tests/state_machine_tests.c state_machine.c state_machine
 $(ACTIVATION_TEST): tests/activation_model_tests.c activation_model.c activation_model.h activation_replay.c activation_replay.h state_machine.c state_machine.h fake_transport.c fake_transport.h transport.c transport.h observation_model.c observation_model.h probe_model.c probe_model.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) tests/activation_model_tests.c activation_model.c activation_replay.c state_machine.c fake_transport.c transport.c observation_model.c probe_model.c -o "$@"
 
-test: $(PROBE_TEST) $(OBSERVATION_TEST) $(DESCRIPTOR_TEST) $(FAKE_TRANSPORT_TEST) $(STATE_MACHINE_TEST) $(ACTIVATION_TEST)
+$(EXCHANGE_TEST): tests/exchange_parser_tests.c exchange_parser.c exchange_parser.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) tests/exchange_parser_tests.c exchange_parser.c -o "$@"
+
+test: $(PROBE_TEST) $(OBSERVATION_TEST) $(DESCRIPTOR_TEST) $(FAKE_TRANSPORT_TEST) $(STATE_MACHINE_TEST) $(ACTIVATION_TEST) $(EXCHANGE_TEST)
 	"$(PROBE_TEST)"
 	"$(OBSERVATION_TEST)"
 	"$(DESCRIPTOR_TEST)"
 	"$(FAKE_TRANSPORT_TEST)"
 	"$(STATE_MACHINE_TEST)"
 	"$(ACTIVATION_TEST)"
+	"$(EXCHANGE_TEST)"
+	PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 tests/test_etw_metadata_import.py
 
 clean:
 	rm -rf "$(BUILD_DIR)"

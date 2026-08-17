@@ -69,13 +69,13 @@ assert_activation_total_bound(void)
         "event 0 0 marker capture-start\n"
         "event 1 1 marker action-issued\n",
         file) >= 0);
-    for (unsigned sequence = 2; sequence < 7; ++sequence) {
+    for (unsigned sequence = 2; sequence < 8; ++sequence) {
         assert(fprintf(file, "event %u %u transfer out bulk 02 16777216\n",
             sequence, sequence) > 0);
     }
     assert(fputs(
-        "event 7 7 marker output-stable\n"
-        "event 8 8 marker capture-end\n",
+        "event 8 8 marker output-stable\n"
+        "event 9 9 marker capture-end\n",
         file) >= 0);
     rewind(file);
     DBActivationEnvelope *envelope = calloc(1, sizeof(*envelope));

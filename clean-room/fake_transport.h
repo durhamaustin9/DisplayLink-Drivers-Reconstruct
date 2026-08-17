@@ -9,13 +9,13 @@
 enum {
     DB_FAKE_ENDPOINT_OUT = 0x02,
     DB_FAKE_ENDPOINT_IN = 0x84,
-    DB_FAKE_MAX_PACKET_SIZE = 1024,
+    DB_FAKE_MAX_CHUNK_SIZE = 1024,
     DB_FAKE_QUEUE_CAPACITY = 8
 };
 
 typedef struct {
     size_t length;
-    uint8_t bytes[DB_FAKE_MAX_PACKET_SIZE];
+    uint8_t bytes[DB_FAKE_MAX_CHUNK_SIZE];
 } DBFakePacket;
 
 typedef struct {

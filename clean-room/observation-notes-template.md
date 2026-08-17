@@ -9,7 +9,7 @@ Do not commit this completed form. Store it under `observations-private/`.
 - UTC start/end:
 - Lawfully owned hardware confirmed: yes/no
 - Applicable agreement/law reviewed where necessary: yes/no/not determined
-- Capture method: hardware analyzer/Linux usbmon/Windows USBPcap
+- Capture method: hardware analyzer/Linux usbmon/Windows USB ETW/Windows USBPcap
 - Capture tool and version:
 - Raw capture filename:
 - Raw capture SHA-256:
