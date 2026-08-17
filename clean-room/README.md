@@ -34,9 +34,9 @@ write function, and its test requires both attempted and successful write
 counters to remain zero. Synthetic inbound packets can be injected into the
 fake dock for future parser tests, but no protocol payload has been invented.
 
-A separate parser now validates only the control-qualified structure and
-ordered direction/length shape of the first observed data-bearing burst at the
-USB boundary. Exercise it with:
+A separate parser now validates only the control-qualified structure and the
+two observed direction/length order variants of the first data-bearing burst
+at the USB boundary. Exercise it with:
 
 ```sh
 make exchange-lab
@@ -44,12 +44,15 @@ make exchange-lab
 
 The lab creates deterministic nonzero synthetic transfers, sends them only
 through the in-memory fake transport, and requires the parser to reach
-`complete` after 15 ordered transfers. It validates the observed four-byte IN
-length prefix and OUT length alignment without assigning any other field or
-command meaning. It records four observed-variable position ranges without
-storing either the matching or varying captured values. It has no real-device
-transport. The reviewed facts and capture limitations are recorded in
+`complete` after all 15 roles in either of the two observed orders. It validates
+the observed four-byte IN length prefix and OUT length alignment without
+assigning any other field or command meaning. It records six disjoint observed-
+variable position ranges totaling 147 bytes without storing either the
+matching or varying captured values. It has no real-device transport. The
+reviewed startup facts and capture limitations are recorded in
 [`observations/windows-native-usbpcap-cold-2026-08-17.md`](observations/windows-native-usbpcap-cold-2026-08-17.md).
+The independently repeated HDMI insertion/removal transitions are recorded in
+[`observations/windows-native-usbpcap-hdmi-transitions-2026-08-17.md`](observations/windows-native-usbpcap-hdmi-transitions-2026-08-17.md).
 
 The parser accepts the endpoint address with every transfer and rejects
 anything other than bulk OUT `0x02` or bulk IN `0x84`. Any future capture or
@@ -161,10 +164,13 @@ transport. A descriptor does not document the proprietary activation, control,
 mode-setting, or compressed-frame protocol. Consequently this probe does not
 light a DisplayLink-connected monitor and is not a replacement display driver.
 
-The next safe research gate is an independently documented protocol transcript
-for this exact DL-3900/Ella device. Its records can then be implemented as
-bounded parsers and exercised through the existing fake transport before any
-code is allowed to send bytes to real hardware. A macOS
+The requested trace matrix now documents repeatable startup, HDMI-absent,
+HDMI-2/HDMI-3, insertion, and removal behavior at the metadata boundary. The
+next safe gate is offline: derive only independently supportable message
+structure, add bounded parsers and fuzz targets, and exercise them through the
+existing fake transport. No captured OUT body is eligible for replay, and no
+code is allowed to send bytes to real hardware until request construction has
+an independent specification. A macOS
 implementation would still need a supported way to publish a desktop display
 and receive its pixels; current public DriverKit families do not provide a
 third-party host display family.

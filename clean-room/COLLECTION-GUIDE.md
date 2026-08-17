@@ -70,7 +70,10 @@ The probe intentionally omits device and monitor serial numbers.
 ## Minimum experiment matrix
 
 Perform one action per capture. Start recording before the action and leave at
-least five seconds of idle traffic on each side. Repeat each trial three times.
+least five seconds of idle traffic on each side. Three repetitions are the
+target before promoting an exact order or semantic claim; a narrower
+metadata/partial-order milestone may deliberately stop at two when its limits
+are recorded explicitly.
 
 | Trial | Initial state | One action | Expected observation to record |
 | --- | --- | --- | --- |
@@ -82,6 +85,21 @@ least five seconds of idle traffic on each side. Repeat each trial three times.
 | F | One supported mode active | Select another documented mode | Mode-setting sequence |
 | G | Static screen active | Disconnect monitor | Head removal and recovery |
 | H | Static screen active | Unplug and reconnect dock | Hotplug recovery |
+
+### Current matrix status
+
+The 2026-08-17 evidence set completes the capture work requested for the
+current startup and HDMI-transition milestone: three powered-dock USB
+reconnects, three observer-reported full power cycles, three HDMI-absent
+controls, two HDMI-3-only starts, two in-session HDMI-2 insertions, and two
+in-session HDMI-2 removals. The sanitized results are recorded under
+[`observations/`](observations/).
+
+No additional USB capture is required before the current metadata is converted
+into offline specifications, bounded parsers, and fake-transport tests. Trials
+D, E, F, H, sleep/wake, and malformed-input work remain future stages; perform
+them only after the preceding protocol layer has an independently reviewed
+parser and a data-minimization plan.
 
 Use only source-authored, synthetic full-screen patterns. Never display the
 desktop, a browser account, copyrighted video, DRM content, notifications, or

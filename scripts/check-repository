@@ -419,9 +419,12 @@ clean_room_exchange_lab="$controller_check_root/clean-room-exchange-lab"
 exchange_lab_output="$controller_check_root/exchange-lab-output.txt"
 "$clean_room_exchange_lab" > "$exchange_lab_output" || \
     fail "first-burst lab failed"
-/usr/bin/grep -F -q 'frames=15 writes=7 reads=8 parser-state=complete' \
-    "$exchange_lab_output" || fail "first-burst lab did not parse the full shape"
-/usr/bin/grep -F -q 'observed-variable-windows=4 observed-variable-bytes=145' \
+/usr/bin/grep -F -q 'order=canonical frames=15 writes=7 reads=8' \
+    "$exchange_lab_output" || fail "first-burst lab lost the canonical order"
+/usr/bin/grep -F -q \
+    'order=canonical-role-indices-9-10-swapped frames=15 writes=7 reads=8' \
+    "$exchange_lab_output" || fail "first-burst lab lost the observed adjacent swap"
+/usr/bin/grep -F -q 'observed-variable-ranges=6 observed-variable-bytes=147' \
     "$exchange_lab_output" || fail "first-burst lab lost its control-qualified position mask"
 /usr/bin/grep -F -q 'hardware remains disabled' "$exchange_lab_output" || \
     fail "first-burst lab did not retain its hardware-disabled boundary"

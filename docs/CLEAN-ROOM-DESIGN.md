@@ -16,15 +16,20 @@ rejects payload fields and semantic command labels. Its fake replay constructs
 only zero-filled chunks; endpoint-zero control records remain unreplayed. No
 captured payload enters that parser or replay.
 
-Three native Windows USBPcap reconnect trials plus HDMI-absent and reported
-full-power-cycle controls establish one repeatable first-burst direction/length
-shape and two structural correlations: every complete payload-bearing IN transfer uses
-the observed four-byte length prefix, and every OUT declaration is positive
-and 16-byte aligned. Comparison found four observed-variable position ranges
-totaling 145 bytes; the source records only their offsets and lengths, never
-any captured value. The parser validates only this structure using source-
-authored synthetic bodies. It does not identify an activation command,
-interpret the variable ranges, or enable a real transport.
+Eleven native Windows USBPcap startup/control trials establish one repeatable
+15-role first-burst multiset and exactly two observed order variants. One
+reported full-power-cycle trial reversed an adjacent inbound pair, so the
+parser does not impose a total order that the evidence disproves. Across the
+full 15-capture matrix, every complete payload-bearing IN transfer uses the
+observed four-byte length prefix and every OUT declaration is positive and
+16-byte aligned. Role-aligned comparison of the 11 startup/control first bursts
+found six disjoint observed-variable position ranges totaling 147 bytes; the
+source records only their offsets and lengths, never any captured value. Two
+HDMI insertion and two removal trials also qualify transitions between small
+polling and large streaming at the metadata level. The parser validates only
+the first-burst structure using
+source-authored synthetic bodies. It does not identify an activation command,
+interpret the variable ranges, parse display data, or enable a real transport.
 
 ## Verified starting point
 
@@ -47,6 +52,12 @@ The sanitized
 [native Windows USBPcap observation](../clean-room/observations/windows-native-usbpcap-cold-2026-08-17.md)
 records the first data-bearing burst and its capture limits. It is black-box
 evidence, not a semantic protocol specification.
+
+The sanitized
+[HDMI transition observation](../clean-room/observations/windows-native-usbpcap-hdmi-transitions-2026-08-17.md)
+records repeatable insertion/removal boundaries and their partial orders. It
+does not equate a USB event with the untimestamped physical cable action or
+assign a command meaning to any transfer.
 
 The implemented fake transport models the two endpoint directions with
 eight-entry queues containing at most 1024 bytes per synthetic chunk. That is

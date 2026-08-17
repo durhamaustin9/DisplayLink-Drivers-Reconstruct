@@ -33,9 +33,9 @@ The first independent milestone is implemented and tested:
 - rejects raw payload fields, oversized transfers, out-of-order records, and
   non-allowlisted USB devices;
 - models `0x02`/`0x84` with bounded, in-memory packet queues;
-- validates the 15-transfer shape of the first observed data-bearing burst
-  using synthetic transfers, without interpreting bytes beyond the provisional
-  IN length prefix; and
+- validates the 15-role shape and the two observed adjacent-order variants of
+  the first data-bearing burst using synthetic transfers, without interpreting
+  bytes beyond the provisional IN length prefix; and
 - stops its device state machine at a protocol-undocumented gate with zero
   attempted writes.
 
@@ -68,18 +68,22 @@ command meaning, or exact activation latency. See the
 [activation envelope specification](clean-room/ACTIVATION-ENVELOPE.md).
 
 `make exchange-lab` exercises a control-qualified first-burst parser entirely
-against the fake transport. Three native Windows USBPcap reconnect trials, one
-HDMI-absent control, and one reported full-power-cycle control all reproduced
-the exact 15-transfer direction/length shape. Across them, all complete payload-
-bearing
-IN transfers had the same bounded four-byte length prefix and every observed
-OUT declaration was positive and 16-byte aligned. The lab constructs fresh
-deterministic nonzero synthetic bodies and records only four observed-variable
-position ranges; it contains no captured value, message, key, firmware, or
-screen data. The real-device state machine remains blocked because these
-correlations do not establish command meanings or an independently authored
-request. See the
+against the fake transport. Eleven native Windows USBPcap startup/control
+trials reproduced the same 15 direction/length roles. Ten used the canonical
+order; one full-power-cycle trial reversed one adjacent inbound pair, so the
+parser accepts exactly those two observed variants instead of assuming a total
+order. Across the full 15-capture matrix, all complete payload-bearing IN
+transfers had the same bounded four-byte length prefix and every observed OUT
+declaration was positive and 16-byte aligned. Within the 11 startup/control
+first bursts, the lab records only six disjoint observed-variable position
+ranges totaling 147 bytes. It constructs fresh deterministic nonzero synthetic
+bodies and contains no captured value, message, key, firmware, or screen data.
+The real-device state machine remains blocked because these correlations do not
+establish command meanings or an independently authored request. See the
 [sanitized reconnect and control observations](clean-room/observations/windows-native-usbpcap-cold-2026-08-17.md).
+The separately documented HDMI hotplug and hot-unplug trials qualify the
+[small-polling/large-streaming transition](clean-room/observations/windows-native-usbpcap-hdmi-transitions-2026-08-17.md)
+at the metadata level only.
 
 After quitting DockBridge completely, `make read-descriptors` performs an
 explicitly opted-in USB-standard configuration-descriptor read against only
@@ -112,7 +116,7 @@ DL-3900/Ella revision still need independent documentation and tests.
 | Attached display | HP Z27H, reported at 1920×1080/144 Hz on 2026-08-13 |
 | Independent probe | Device and seven interface descriptors found read-only |
 | Independent clean-room USB video | Not implemented or demonstrated |
-| External black-box USB video | HDMI 2, 1920×1080/60 Hz; three Windows ARM64 guest trials, three native USB reconnect trials, one HDMI-absent control, and one reported full-power-cycle control |
+| External black-box USB video | HDMI 2/3, 1920×1080/60 Hz; three Windows ARM64 guest trials and 15 native USBPcap reconnect, power, port, no-HDMI, hotplug, and hot-unplug controls |
 
 An earlier version of this README incorrectly treated the 144 Hz external
 display as proof that the experimental Core derivative was driving HDMI 2/3.
@@ -164,7 +168,9 @@ Apple references:
 
 ## Clean-room roadmap
 
-The next stages are gated deliberately:
+The requested USB trace matrix is complete for the current first-burst and HDMI
+transition milestone; no additional capture is needed before the next offline
+implementation work. The remaining stages are gated deliberately:
 
 1. preserve public USB descriptors for this exact hardware without identifiers;
 2. preserve the three validated black-box activation-window envelopes and
@@ -175,8 +181,9 @@ The next stages are gated deliberately:
    executable code, keys, or vendor resources;
 5. implement damage encoding and USB transport behind an exact device allowlist;
 6. choose a macOS publication/capture architecture with honest privacy UI; and
-7. qualify both USB-graphics outputs, hotplug, sleep/wake, malformed responses,
-   disconnects, and long-duration operation.
+7. extend the completed two-port/hotplug metadata controls with independently
+   implemented mode, damage, sleep/wake, malformed-response, and long-duration
+   tests only as their protocol layers become understood.
 
 See [`clean-room/README.md`](clean-room/README.md) and the
 [proposed design](docs/CLEAN-ROOM-DESIGN.md). To contribute externally observed

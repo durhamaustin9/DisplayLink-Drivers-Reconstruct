@@ -62,7 +62,10 @@ confirmed repeated traffic and visible output on the two candidate endpoints,
 but it does not reveal payload format or command meaning and is not a physical
 Mac-bus trace. A later
 [native Windows USBPcap reconnect and control observations](windows-native-usbpcap-cold-2026-08-17.md)
-captured five complete first data-bearing bursts and repeated structural
-patterns, including HDMI-absent and reported full-power-cycle controls. Later
-activation phases remain uninterpreted, and the traces do not establish command
-semantics.
+captured 11 complete first data-bearing bursts and repeated structural
+patterns across reconnect, HDMI-absent, reported full-power-cycle, and
+HDMI-3-only controls. Two additional
+[HDMI insertion and removal pairs](windows-native-usbpcap-hdmi-transitions-2026-08-17.md)
+qualify metadata-level transitions between small polling and large streaming.
+Later activation phases remain uninterpreted, and the traces do not establish
+command semantics.
