@@ -55,8 +55,8 @@ main(void)
     uint8_t source[DB_EXCHANGE_MAX_FRAME_SIZE] = {0};
     uint8_t received[DB_EXCHANGE_MAX_FRAME_SIZE] = {0};
     size_t received_length = 0;
-    size_t trial_variable_windows = 0;
-    size_t trial_variable_bytes = 0;
+    size_t observed_variable_windows = 0;
+    size_t observed_variable_bytes = 0;
 
     db_fake_transport_initialize(&fake, &transport);
     db_exchange_parser_initialize(&parser);
@@ -107,19 +107,19 @@ main(void)
             fputs("exchange-lab: structure metadata failed\n", stderr);
             return 1;
         }
-        if (structure.trial_variable_length > 0) {
-            ++trial_variable_windows;
-            trial_variable_bytes += structure.trial_variable_length;
+        if (structure.observed_variable_length > 0) {
+            ++observed_variable_windows;
+            observed_variable_bytes += structure.observed_variable_length;
         }
     }
     printf("frames=%zu writes=%zu reads=%zu parser-state=%s\n",
         parser.next_frame_index, fake.write_success_count,
         fake.read_success_count, db_exchange_state_name(parser.state));
-    printf("trial-variable-windows=%zu trial-variable-bytes=%zu\n",
-        trial_variable_windows, trial_variable_bytes);
+    printf("observed-variable-windows=%zu observed-variable-bytes=%zu\n",
+        observed_variable_windows, observed_variable_bytes);
     if (parser.state != DB_EXCHANGE_COMPLETE ||
         fake.write_success_count != 7 || fake.read_success_count != 8 ||
-        trial_variable_windows != 3 || trial_variable_bytes != 144) {
+        observed_variable_windows != 4 || observed_variable_bytes != 145) {
         fputs("exchange-lab: completion invariant failed\n", stderr);
         return 1;
     }

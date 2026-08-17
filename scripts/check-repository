@@ -421,8 +421,8 @@ exchange_lab_output="$controller_check_root/exchange-lab-output.txt"
     fail "first-burst lab failed"
 /usr/bin/grep -F -q 'frames=15 writes=7 reads=8 parser-state=complete' \
     "$exchange_lab_output" || fail "first-burst lab did not parse the full shape"
-/usr/bin/grep -F -q 'trial-variable-windows=3 trial-variable-bytes=144' \
-    "$exchange_lab_output" || fail "first-burst lab lost its three-trial position mask"
+/usr/bin/grep -F -q 'observed-variable-windows=4 observed-variable-bytes=145' \
+    "$exchange_lab_output" || fail "first-burst lab lost its control-qualified position mask"
 /usr/bin/grep -F -q 'hardware remains disabled' "$exchange_lab_output" || \
     fail "first-burst lab did not retain its hardware-disabled boundary"
 if /usr/bin/otool -L "$clean_room_exchange_lab" | /usr/bin/grep -E -q -- \

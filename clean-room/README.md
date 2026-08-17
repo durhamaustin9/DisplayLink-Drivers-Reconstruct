@@ -34,7 +34,7 @@ write function, and its test requires both attempted and successful write
 counters to remain zero. Synthetic inbound packets can be injected into the
 fake dock for future parser tests, but no protocol payload has been invented.
 
-A separate parser now validates only the three-trial-qualified structure and
+A separate parser now validates only the control-qualified structure and
 ordered direction/length shape of the first observed data-bearing burst at the
 USB boundary. Exercise it with:
 
@@ -46,7 +46,7 @@ The lab creates deterministic nonzero synthetic transfers, sends them only
 through the in-memory fake transport, and requires the parser to reach
 `complete` after 15 ordered transfers. It validates the observed four-byte IN
 length prefix and OUT length alignment without assigning any other field or
-command meaning. It records three trial-variable position ranges without
+command meaning. It records four observed-variable position ranges without
 storing either the matching or varying captured values. It has no real-device
 transport. The reviewed facts and capture limitations are recorded in
 [`observations/windows-native-usbpcap-cold-2026-08-17.md`](observations/windows-native-usbpcap-cold-2026-08-17.md).

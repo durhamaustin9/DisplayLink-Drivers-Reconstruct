@@ -48,35 +48,38 @@ main(void)
     assert(parser.state == DB_EXCHANGE_WAITING);
     assert(parser.next_frame_index == 0);
 
-    size_t trial_variable_windows = 0;
-    size_t trial_variable_bytes = 0;
+    size_t observed_variable_windows = 0;
+    size_t observed_variable_bytes = 0;
     for (size_t index = 0; index < DB_EXCHANGE_PHASE_A_FRAME_COUNT; ++index) {
         DBExchangeTransferStructure structure = {0};
         assert(db_exchange_phase_a_structure(index, &structure) ==
             DB_EXCHANGE_OK);
         assert(structure.direction == phase_a[index].direction);
         assert(structure.length == phase_a[index].length);
-        assert(structure.trial_variable_offset +
-            structure.trial_variable_length <= structure.length);
-        if (structure.trial_variable_length > 0) {
-            ++trial_variable_windows;
-            trial_variable_bytes += structure.trial_variable_length;
+        assert(structure.observed_variable_offset +
+            structure.observed_variable_length <= structure.length);
+        if (structure.observed_variable_length > 0) {
+            ++observed_variable_windows;
+            observed_variable_bytes += structure.observed_variable_length;
         } else {
-            assert(structure.trial_variable_offset == 0);
+            assert(structure.observed_variable_offset == 0);
         }
         if (index == 6) {
-            assert(structure.trial_variable_offset == 44);
-            assert(structure.trial_variable_length == 8);
+            assert(structure.observed_variable_offset == 44);
+            assert(structure.observed_variable_length == 8);
+        } else if (index == 10) {
+            assert(structure.observed_variable_offset == 24);
+            assert(structure.observed_variable_length == 1);
         } else if (index == 12) {
-            assert(structure.trial_variable_offset == 44);
-            assert(structure.trial_variable_length == 128);
+            assert(structure.observed_variable_offset == 44);
+            assert(structure.observed_variable_length == 128);
         } else if (index == 14) {
-            assert(structure.trial_variable_offset == 26);
-            assert(structure.trial_variable_length == 8);
+            assert(structure.observed_variable_offset == 26);
+            assert(structure.observed_variable_length == 8);
         }
     }
-    assert(trial_variable_windows == 3);
-    assert(trial_variable_bytes == 144);
+    assert(observed_variable_windows == 4);
+    assert(observed_variable_bytes == 145);
     DBExchangeTransferStructure structure = {0};
     assert(db_exchange_phase_a_structure(DB_EXCHANGE_PHASE_A_FRAME_COUNT,
         &structure) == DB_EXCHANGE_INVALID_ARGUMENT);

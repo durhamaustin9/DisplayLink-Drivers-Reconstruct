@@ -3,7 +3,7 @@
 /*
  * Externally observed phase-A transfer shape. The table contains no captured
  * bytes and assigns no command meaning to any transfer. Variable ranges are
- * byte-position correlations across three trials, not interpreted fields.
+ * byte-position correlations across five observations, not interpreted fields.
  */
 static const DBExchangeTransferStructure
 phase_a_shape[DB_EXCHANGE_PHASE_A_FRAME_COUNT] = {
@@ -17,7 +17,7 @@ phase_a_shape[DB_EXCHANGE_PHASE_A_FRAME_COUNT] = {
     {DB_EXCHANGE_DIRECTION_IN, 38, 0, 0},
     {DB_EXCHANGE_DIRECTION_OUT, 64, 0, 0},
     {DB_EXCHANGE_DIRECTION_IN, 38, 0, 0},
-    {DB_EXCHANGE_DIRECTION_IN, 549, 0, 0},
+    {DB_EXCHANGE_DIRECTION_IN, 549, 24, 1},
     {DB_EXCHANGE_DIRECTION_IN, 31, 0, 0},
     {DB_EXCHANGE_DIRECTION_OUT, 176, 44, 128},
     {DB_EXCHANGE_DIRECTION_IN, 38, 0, 0},

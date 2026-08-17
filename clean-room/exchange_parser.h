@@ -33,15 +33,15 @@ typedef enum {
 } DBExchangeResult;
 
 /*
- * Byte-position correlation across three controlled cold-connect trials.
- * A zero variable length means no variation was observed; it does not prove
- * that the transfer is a protocol constant under different conditions.
+ * Byte-position correlation across five controlled observations, including
+ * monitor-absent and reported full-power-cycle controls. A zero variable length
+ * means no variation was observed; it does not prove a protocol constant.
  */
 typedef struct {
     DBExchangeDirection direction;
     size_t length;
-    size_t trial_variable_offset;
-    size_t trial_variable_length;
+    size_t observed_variable_offset;
+    size_t observed_variable_length;
 } DBExchangeTransferStructure;
 
 typedef struct {
