@@ -179,6 +179,17 @@ for clean_room_source in \
     "$clean_room_dir/exchange_parser.c" \
     "$clean_room_dir/exchange_parser.h" \
     "$clean_room_dir/exchange_lab.c" \
+    "$clean_room_dir/protocol_transfer.h" \
+    "$clean_room_dir/partial_order_matcher.c" \
+    "$clean_room_dir/partial_order_matcher.h" \
+    "$clean_room_dir/qualified_sequences.c" \
+    "$clean_room_dir/qualified_sequences.h" \
+    "$clean_room_dir/transition_parser.c" \
+    "$clean_room_dir/transition_parser.h" \
+    "$clean_room_dir/traffic_regime.c" \
+    "$clean_room_dir/traffic_regime.h" \
+    "$clean_room_dir/protocol_model_lab.c" \
+    "$clean_room_dir/fuzz/transition_parser_fuzz.c" \
     "$clean_room_dir/etw_metadata_import.py" \
     "$clean_room_dir/tests/probe_model_tests.c" \
     "$clean_room_dir/tests/descriptor_model_tests.c" \
@@ -187,13 +198,28 @@ for clean_room_source in \
     "$clean_room_dir/tests/state_machine_tests.c" \
     "$clean_room_dir/tests/activation_model_tests.c" \
     "$clean_room_dir/tests/exchange_parser_tests.c" \
-    "$clean_room_dir/tests/test_etw_metadata_import.py"; do
+    "$clean_room_dir/tests/partial_order_matcher_tests.c" \
+    "$clean_room_dir/tests/qualified_sequences_tests.c" \
+    "$clean_room_dir/tests/transition_parser_tests.c" \
+    "$clean_room_dir/tests/traffic_regime_tests.c" \
+    "$clean_room_dir/tests/test_etw_metadata_import.py" \
+    "$clean_room_dir/tests/test_facts_registry.py" \
+    "$clean_room_dir/facts.tsv" \
+    "$clean_room_dir/FACTS.md" \
+    "$clean_room_dir/OFFLINE-PROTOCOL-MODEL.md"; do
     [[ -f "$clean_room_source" && ! -L "$clean_room_source" ]] || \
         fail "clean-room source is missing or linked: ${clean_room_source#"$repo_dir/"}"
+    clean_room_relative=${clean_room_source#"$repo_dir/"}
+    git -C "$repo_dir" ls-files --error-unmatch -- \
+        "$clean_room_relative" >/dev/null 2>&1 || \
+        fail "required clean-room source is not tracked: $clean_room_relative"
 done
 PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 \
     "$clean_room_dir/tests/test_etw_metadata_import.py" || \
     fail "ETW metadata importer tests failed"
+PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 \
+    "$clean_room_dir/tests/test_facts_registry.py" || \
+    fail "clean-room fact registry is invalid"
 clean_room_network_pattern='(^|[^[:alnum:]_])(socket|connect|connectx|bind|listen|accept|accept4|send|sendto|sendmsg|recv|recvfrom|recvmsg|getaddrinfo|getnameinfo|gethostbyname|gethostbyaddr)[[:space:]]*\('
 if /usr/bin/grep -E -n -q -- "$clean_room_network_pattern" \
     "$clean_room_dir/dock_probe.c" "$clean_room_dir/probe_model.c" \
@@ -209,8 +235,50 @@ if /usr/bin/grep -E -n -q -- "$clean_room_network_pattern" \
     "$clean_room_dir/activation_replay.c" "$clean_room_dir/activation_replay.h" \
     "$clean_room_dir/activation_check.c" \
     "$clean_room_dir/exchange_parser.c" "$clean_room_dir/exchange_parser.h" \
-    "$clean_room_dir/exchange_lab.c"; then
+    "$clean_room_dir/exchange_lab.c" \
+    "$clean_room_dir/protocol_transfer.h" \
+    "$clean_room_dir/partial_order_matcher.c" \
+    "$clean_room_dir/partial_order_matcher.h" \
+    "$clean_room_dir/qualified_sequences.c" \
+    "$clean_room_dir/qualified_sequences.h" \
+    "$clean_room_dir/transition_parser.c" \
+    "$clean_room_dir/transition_parser.h" \
+    "$clean_room_dir/traffic_regime.c" \
+    "$clean_room_dir/traffic_regime.h" \
+    "$clean_room_dir/protocol_model_lab.c" \
+    "$clean_room_dir/fuzz/transition_parser_fuzz.c"; then
     fail "clean-room probe calls a forbidden networking API"
+fi
+
+model_sources=(
+    "$clean_room_dir/protocol_transfer.h"
+    "$clean_room_dir/partial_order_matcher.c"
+    "$clean_room_dir/partial_order_matcher.h"
+    "$clean_room_dir/qualified_sequences.c"
+    "$clean_room_dir/qualified_sequences.h"
+    "$clean_room_dir/transition_parser.c"
+    "$clean_room_dir/transition_parser.h"
+    "$clean_room_dir/traffic_regime.c"
+    "$clean_room_dir/traffic_regime.h"
+    "$clean_room_dir/protocol_model_lab.c"
+    "$clean_room_dir/fuzz/transition_parser_fuzz.c"
+    "$clean_room_dir/tests/partial_order_matcher_tests.c"
+    "$clean_room_dir/tests/qualified_sequences_tests.c"
+    "$clean_room_dir/tests/transition_parser_tests.c"
+    "$clean_room_dir/tests/traffic_regime_tests.c"
+    "$clean_room_dir/FACTS.md"
+    "$clean_room_dir/OFFLINE-PROTOCOL-MODEL.md"
+    "$clean_room_dir/facts.tsv"
+)
+captured_byte_array_pattern='(0x[0-9A-Fa-f]{2}([uU])?[[:space:]]*,[[:space:]]*){8}'
+base64_blob_pattern='(^|[^A-Za-z0-9+/])[A-Za-z0-9+/]{80,}={0,2}([^A-Za-z0-9+/]|$)'
+if /usr/bin/grep -E -n -q -- "$captured_byte_array_pattern" \
+    "${model_sources[@]}"; then
+    fail "offline protocol model contains a prohibited long byte-literal array"
+fi
+if /usr/bin/grep -E -n -q -- "$base64_blob_pattern" \
+    "${model_sources[@]}"; then
+    fail "offline protocol model contains a prohibited encoded data blob"
 fi
 if /usr/bin/grep -E -n -q -- 'kUSBSerialNumberString|USB Serial Number|serialNumber|IOPlatformSerialNumber' \
     "$clean_room_dir/dock_probe.c" "$clean_room_dir/probe_model.c" \
@@ -332,6 +400,17 @@ fake_lab_sources=(
     "$clean_room_dir/exchange_parser.c"
     "$clean_room_dir/exchange_parser.h"
     "$clean_room_dir/exchange_lab.c"
+    "$clean_room_dir/protocol_transfer.h"
+    "$clean_room_dir/partial_order_matcher.c"
+    "$clean_room_dir/partial_order_matcher.h"
+    "$clean_room_dir/qualified_sequences.c"
+    "$clean_room_dir/qualified_sequences.h"
+    "$clean_room_dir/transition_parser.c"
+    "$clean_room_dir/transition_parser.h"
+    "$clean_room_dir/traffic_regime.c"
+    "$clean_room_dir/traffic_regime.h"
+    "$clean_room_dir/protocol_model_lab.c"
+    "$clean_room_dir/fuzz/transition_parser_fuzz.c"
 )
 fake_hardware_api_pattern='IOUSBHost|IOKit/IOKitLib|IOService(Get|Open|Close|Matching)|IORegistryEntry|configureWithValue:|resetWithError:|sendDeviceRequest:|enqueueDeviceRequest:'
 if /usr/bin/grep -E -n -q -- "$fake_hardware_api_pattern" "${fake_lab_sources[@]}"; then
@@ -438,6 +517,50 @@ exchange_lab_symbols="$controller_check_root/exchange-lab.symbols"
 if /usr/bin/grep -E -q -- '_(IOUSB|IOService|IORegistry|socket|connect|send|recv)' \
     "$exchange_lab_symbols"; then
     fail "first-burst lab imports a hardware-access or networking symbol"
+fi
+
+/usr/bin/make -C "$clean_room_dir" test >/dev/null || \
+    fail "complete clean-room model test suite failed"
+/usr/bin/make -C "$clean_room_dir" test-sanitized >/dev/null || \
+    fail "sanitized clean-room model test suite failed"
+
+clean_room_protocol_model_lab="$controller_check_root/clean-room-protocol-model-lab"
+/usr/bin/xcrun clang \
+    -std=c11 \
+    -Wall -Wextra -Werror \
+    -I "$clean_room_dir" \
+    "$clean_room_dir/protocol_model_lab.c" \
+    "$clean_room_dir/transition_parser.c" \
+    "$clean_room_dir/qualified_sequences.c" \
+    "$clean_room_dir/partial_order_matcher.c" \
+    "$clean_room_dir/traffic_regime.c" \
+    "$clean_room_dir/state_machine.c" \
+    "$clean_room_dir/fake_transport.c" \
+    "$clean_room_dir/transport.c" \
+    -o "$clean_room_protocol_model_lab" || \
+    fail "could not link offline protocol-model lab"
+protocol_model_output="$controller_check_root/protocol-model-output.txt"
+"$clean_room_protocol_model_lab" > "$protocol_model_output" || \
+    fail "offline protocol-model lab failed"
+for required_model_output in \
+    'fact=FACT-HOTPLUG-PREFIX-001 maturity=E2 transfers=24' \
+    'fact=FACT-HOTUNPLUG-PROFILES-001 maturity=E2 transfers=29 profile=hotunplug-correlated-profile-a' \
+    'fact=FACT-HOTUNPLUG-PROFILES-001 maturity=E2 transfers=29 profile=hotunplug-correlated-profile-b' \
+    'fake-transport writes=32 reads=50 real-hardware-writes=0' \
+    'PASS: bounded models completed; hardware writes remain disabled.'; do
+    /usr/bin/grep -F -q -- "$required_model_output" "$protocol_model_output" || \
+        fail "offline protocol-model lab output lost: $required_model_output"
+done
+if /usr/bin/otool -L "$clean_room_protocol_model_lab" | \
+    /usr/bin/grep -E -q -- 'IOKit|IOUSBHost'; then
+    fail "offline protocol-model lab links a real macOS USB or IOKit framework"
+fi
+protocol_model_symbols="$controller_check_root/protocol-model.symbols"
+/usr/bin/nm -u "$clean_room_protocol_model_lab" > "$protocol_model_symbols" || \
+    fail "could not inspect offline protocol-model lab imports"
+if /usr/bin/grep -E -q -- '_(IOUSB|IOService|IORegistry|socket|connect|send|recv)' \
+    "$protocol_model_symbols"; then
+    fail "offline protocol-model lab imports hardware-access or networking symbols"
 fi
 
 clean_room_activation_test="$controller_check_root/clean-room-activation-tests"
@@ -570,16 +693,16 @@ while IFS= read -r -d '' relative_path; do
     [[ -f "$path" ]] || fail "tracked path is not a regular file: $relative_path"
 
     case "$relative_path" in
-        .work/*|build/*|dist/*|artifacts/*|vendor/*|expanded/*|captures/*|observations-private/*|tools/build/*|.codex/*|.agents/*|.claude/*|.cursor/*|.idea/*|.vscode/*|*/.work/*|*/build/*|*/dist/*|*/artifacts/*|*/vendor/*|*/expanded/*|*/captures/*|*/observations-private/*|*/.codex/*|*/.agents/*|*/.claude/*|*/.cursor/*|*/.idea/*|*/.vscode/*)
+        .work/*|build/*|dist/*|artifacts/*|vendor/*|expanded/*|captures/*|observations-private/*|fuzz-corpus/*|tools/build/*|.codex/*|.agents/*|.claude/*|.cursor/*|.idea/*|.vscode/*|*/.work/*|*/build/*|*/dist/*|*/artifacts/*|*/vendor/*|*/expanded/*|*/captures/*|*/observations-private/*|*/fuzz-corpus/*|*/.codex/*|*/.agents/*|*/.claude/*|*/.cursor/*|*/.idea/*|*/.vscode/*)
             fail "tracked path is inside a private/generated directory: $relative_path"
             ;;
-        *.pkg|*.dmg|*.zip|*.tar|*.tgz|*.gz|*.bz2|*.xz|*.7z|*.rar|*.spkg|*.metallib|*.car|*.mov|*.icns|*.png|*.xar|*.bom|*.der|*.codedirectory|*.cer|*.crt|*.p12|*.pfx|*.pem|*.key|*.mobileprovision|*.etl|*.pcap|*.pcapng|*.cap|*.dbobs|*.dba|*.app/*|*/_CodeSignature/*|*/CodeResources)
+        *.pkg|*.dmg|*.zip|*.tar|*.tgz|*.gz|*.bz2|*.xz|*.7z|*.rar|*.spkg|*.metallib|*.car|*.mov|*.icns|*.png|*.xar|*.bom|*.der|*.codedirectory|*.cer|*.crt|*.p12|*.pfx|*.pem|*.key|*.mobileprovision|*.etl|*.pcap|*.pcapng|*.cap|*.dbobs|*.dba|*.profraw|crash-*|leak-*|timeout-*|oom-*|slow-unit-*|*.app/*|*/_CodeSignature/*|*/CodeResources)
             fail "tracked proprietary/generated artifact type: $relative_path"
             ;;
     esac
 
     case "$relative_path" in
-        .gitignore|LICENSE|Makefile|*/Makefile|scripts/*|*.md|*.yml|*.yaml|*.plist|*.sha256|*.c|*.h|*.m|*.py)
+        .gitignore|LICENSE|Makefile|*/Makefile|scripts/*|*.md|*.yml|*.yaml|*.plist|*.sha256|*.tsv|*.c|*.h|*.m|*.py)
             ;;
         *)
             fail "tracked path is outside the source/document allowlist: $relative_path"

@@ -26,6 +26,11 @@ hardware VID:PID and revision, experimental conditions, and whether it was
 independently reproduced. Facts should describe externally visible behavior,
 not a vendor routine or data structure.
 
+For the current offline-model milestone, machine-readable fact maturity and
+source links live in [`facts.tsv`](facts.tsv), with the human review and E0–E8
+promotion rules in [`FACTS.md`](FACTS.md). Implemented structural rules must
+cite those identifiers and remain no broader than their recorded evidence.
+
 ## Excluded inputs and outputs
 
 - copied or translated vendor source, decompiled pseudocode, assembly-derived

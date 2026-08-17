@@ -1,6 +1,27 @@
 #include "state_machine.h"
 
+#include <stdatomic.h>
 #include <string.h>
+
+static _Atomic uint64_t next_machine_generation = UINT64_C(1);
+
+static uint64_t
+take_machine_generation(void)
+{
+    uint64_t current = atomic_load_explicit(&next_machine_generation,
+        memory_order_relaxed);
+    for (;;) {
+        if (current == UINT64_MAX) {
+            return 0U;
+        }
+        uint64_t next = current + UINT64_C(1);
+        if (atomic_compare_exchange_weak_explicit(&next_machine_generation,
+                &current, next, memory_order_relaxed,
+                memory_order_relaxed)) {
+            return current;
+        }
+    }
+}
 
 static int
 identity_is_exact(const DBMachineDeviceIdentity *identity)
@@ -44,6 +65,21 @@ db_machine_initialize(DBMachine *machine, DBTransport *transport)
     };
 }
 
+int
+db_machine_is_exact_verified(const DBMachine *machine)
+{
+    return machine != NULL && machine->transport != NULL &&
+        machine->transport->kind == DB_TRANSPORT_KIND_FAKE &&
+        db_transport_is_open(machine->transport) &&
+        machine->generation != 0U &&
+        machine->transport_lifecycle_epoch != 0U &&
+        db_transport_lifecycle_epoch(machine->transport) ==
+            machine->transport_lifecycle_epoch &&
+        machine->state == DB_MACHINE_TOPOLOGY_VERIFIED &&
+        identity_is_exact(&machine->identity) &&
+        topology_is_exact(&machine->topology);
+}
+
 DBMachineResult
 db_machine_attach(DBMachine *machine, const DBMachineDeviceIdentity *identity)
 {
@@ -60,6 +96,11 @@ db_machine_attach(DBMachine *machine, const DBMachineDeviceIdentity *identity)
         return DB_MACHINE_REAL_TRANSPORT_DISABLED;
     }
 
+    uint64_t generation = take_machine_generation();
+    if (generation == 0U) {
+        machine->state = DB_MACHINE_FAULT;
+        return DB_MACHINE_TRANSPORT_ERROR;
+    }
     DBTransportResult opened = db_transport_open(machine->transport);
     machine->last_transport_result = opened;
     if (opened != DB_TRANSPORT_OK) {
@@ -69,7 +110,15 @@ db_machine_attach(DBMachine *machine, const DBMachineDeviceIdentity *identity)
 
     machine->identity = *identity;
     machine->state = DB_MACHINE_ATTACHED;
-    ++machine->generation;
+    machine->generation = generation;
+    machine->transport_lifecycle_epoch =
+        db_transport_lifecycle_epoch(machine->transport);
+    if (machine->transport_lifecycle_epoch == 0U) {
+        db_transport_close(machine->transport);
+        machine->last_transport_result = DB_TRANSPORT_INVALID_ARGUMENT;
+        machine->state = DB_MACHINE_FAULT;
+        return DB_MACHINE_TRANSPORT_ERROR;
+    }
     return DB_MACHINE_OK;
 }
 
@@ -128,6 +177,7 @@ db_machine_detach(DBMachine *machine)
     db_transport_close(machine->transport);
     memset(&machine->identity, 0, sizeof(machine->identity));
     memset(&machine->topology, 0, sizeof(machine->topology));
+    machine->transport_lifecycle_epoch = 0U;
     machine->state = DB_MACHINE_OFFLINE;
     machine->last_transport_result = DB_TRANSPORT_OK;
     return DB_MACHINE_OK;

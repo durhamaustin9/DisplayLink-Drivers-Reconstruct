@@ -89,6 +89,13 @@ observations-private/
 **/observations-private/
 *.crash
 *.ips
+crash-*
+leak-*
+timeout-*
+oom-*
+slow-unit-*
+*.profraw
+clean-room/fuzz-corpus/
 core
 core.[0-9]*
 .env

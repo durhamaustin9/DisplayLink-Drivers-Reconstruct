@@ -66,6 +66,8 @@ main(void)
     db_fake_transport_initialize(&fake, &transport);
     db_machine_initialize(&machine, &transport);
     assert(machine.state == DB_MACHINE_OFFLINE);
+    assert(!db_machine_is_exact_verified(&machine));
+    assert(!db_machine_is_exact_verified(NULL));
     assert(db_machine_request_activation(&machine) == DB_MACHINE_WRONG_STATE);
 
     DBMachineDeviceIdentity wrong_identity = exact_identity;
@@ -86,14 +88,20 @@ main(void)
 
     assert(db_machine_attach(&machine, &exact_identity) == DB_MACHINE_OK);
     assert(machine.state == DB_MACHINE_ATTACHED);
-    assert(machine.generation == 1);
+    assert(machine.generation != 0U);
+    assert(machine.transport_lifecycle_epoch != 0U);
+    assert(machine.transport_lifecycle_epoch ==
+        db_transport_lifecycle_epoch(&transport));
+    uint64_t first_generation = machine.generation;
     assert(fake.open_count == 1);
     assert(db_machine_attach(&machine, &exact_identity) == DB_MACHINE_WRONG_STATE);
     assert(db_machine_verify_topology(&machine, &exact_topology) == DB_MACHINE_OK);
     assert(machine.state == DB_MACHINE_TOPOLOGY_VERIFIED);
+    assert(db_machine_is_exact_verified(&machine));
     assert(db_machine_request_activation(&machine) ==
         DB_MACHINE_PROTOCOL_UNDOCUMENTED);
     assert(machine.state == DB_MACHINE_BLOCKED_PROTOCOL_UNDOCUMENTED);
+    assert(!db_machine_is_exact_verified(&machine));
     assert(db_machine_request_activation(&machine) ==
         DB_MACHINE_PROTOCOL_UNDOCUMENTED);
     assert(fake.write_attempt_count == 0);
@@ -127,7 +135,8 @@ main(void)
     assert(db_machine_detach(&machine) == DB_MACHINE_OK);
     db_fake_transport_reconnect(&fake);
     assert(db_machine_attach(&machine, &exact_identity) == DB_MACHINE_OK);
-    assert(machine.generation == 2);
+    assert(machine.generation != 0U);
+    assert(machine.generation != first_generation);
     assert(db_machine_report_transport_fault(&machine,
         DB_TRANSPORT_DISCONNECTED) == DB_MACHINE_TRANSPORT_ERROR);
     assert(machine.state == DB_MACHINE_FAULT);

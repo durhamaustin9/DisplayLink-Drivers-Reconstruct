@@ -9,6 +9,17 @@ observation parsers, a control-qualified first-burst structural parser, and an
 in-memory fake transport with a protocol-gated device state machine in
 `clean-room/`. None carries a captured vendor payload.
 
+The current offline milestone also implements a fixed-storage partial-order
+matcher, evidence-qualified startup and transition role graphs, exact fake-
+machine attachment-generation and transport-lifecycle binding, a monotonic
+declared-length classifier, a
+deterministic mutation harness, and ASan/UBSan gates. The transition recognizer
+accepts only the repeated insertion-correlated prefix or one of two complete
+removal-correlated profiles; it rejects cross-profile hybrids. These are trace-
+shape recognizers, not message parsers or request builders. See
+[`FACTS.md`](../clean-room/FACTS.md) and
+[`OFFLINE-PROTOCOL-MODEL.md`](../clean-room/OFFLINE-PROTOCOL-MODEL.md).
+
 An activation-envelope parser is also implemented. It can represent an
 externally observed cold-connect or warm-start interval using monotonic event
 timestamps plus control/bulk direction, endpoint, and length metadata. It
@@ -26,8 +37,9 @@ observed four-byte length prefix and every OUT declaration is positive and
 found six disjoint observed-variable position ranges totaling 147 bytes; the
 source records only their offsets and lengths, never any captured value. Two
 HDMI insertion and two removal trials also qualify transitions between small
-polling and large streaming at the metadata level. The parser validates only
-the first-burst structure using
+polling and large streaming at the metadata level. The first-burst parser
+validates only that startup structure, while the separate transition parser
+recognizes the two provisional transition-profile families using
 source-authored synthetic bodies. It does not identify an activation command,
 interpret the variable ranges, parse display data, or enable a real transport.
 
@@ -62,8 +74,8 @@ assign a command meaning to any transfer.
 The implemented fake transport models the two endpoint directions with
 eight-entry queues containing at most 1024 bytes per synthetic chunk. That is
 an implementation bound, not a claim that host bulk transfers are limited to
-one USB maximum packet; larger metadata-only transfers are deliberately split
-for fake replay. The current state machine accepts only
+one USB maximum packet; larger observations are classified as metadata without
+materializing captured bodies in the fake queue. The current state machine accepts only
 the exact observed VID, PID, revision, interface classes, endpoints, packet
 sizes, burst counts, and stream counts. It exposes no real transport type and
 stops activation at `blocked-protocol-undocumented`. The state-machine source

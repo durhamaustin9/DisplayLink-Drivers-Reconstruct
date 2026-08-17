@@ -21,6 +21,8 @@ typedef enum {
 typedef struct {
     DBTransportResult (*open)(void *context);
     void (*close)(void *context);
+    int (*is_open)(const void *context);
+    uint64_t (*lifecycle_epoch)(const void *context);
     DBTransportResult (*write)(void *context, uint8_t endpoint,
         const uint8_t *bytes, size_t length);
     DBTransportResult (*read)(void *context, uint8_t endpoint,
@@ -35,6 +37,8 @@ typedef struct {
 
 DBTransportResult db_transport_open(DBTransport *transport);
 void db_transport_close(DBTransport *transport);
+int db_transport_is_open(const DBTransport *transport);
+uint64_t db_transport_lifecycle_epoch(const DBTransport *transport);
 DBTransportResult db_transport_write(DBTransport *transport,
     uint8_t endpoint, const uint8_t *bytes, size_t length);
 DBTransportResult db_transport_read(DBTransport *transport,

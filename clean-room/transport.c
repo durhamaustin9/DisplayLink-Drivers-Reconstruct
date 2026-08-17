@@ -19,6 +19,25 @@ db_transport_close(DBTransport *transport)
     }
 }
 
+int
+db_transport_is_open(const DBTransport *transport)
+{
+    return transport != NULL && transport->operations != NULL &&
+        transport->operations->is_open != NULL && transport->context != NULL &&
+        transport->operations->is_open(transport->context);
+}
+
+uint64_t
+db_transport_lifecycle_epoch(const DBTransport *transport)
+{
+    if (transport == NULL || transport->operations == NULL ||
+        transport->operations->lifecycle_epoch == NULL ||
+        transport->context == NULL) {
+        return 0U;
+    }
+    return transport->operations->lifecycle_epoch(transport->context);
+}
+
 DBTransportResult
 db_transport_write(DBTransport *transport, uint8_t endpoint,
     const uint8_t *bytes, size_t length)

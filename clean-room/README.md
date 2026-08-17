@@ -18,8 +18,9 @@ does not link IOKit or IOUSBHost, enumerate a device, or contain a real-hardware
 transport kind.
 
 The queue's 1024-byte storage unit is a bounded synthetic chunk, not a maximum
-host-transfer claim. Metadata-only replay splits larger observed transfer
-lengths across chunks and does not preserve or reconstruct their bodies.
+host-transfer claim. Large declared lengths are classified as metadata without
+being materialized in this queue; no model preserves or reconstructs their
+bodies.
 
 Run the simulator with:
 
@@ -58,6 +59,35 @@ The parser accepts the endpoint address with every transfer and rejects
 anything other than bulk OUT `0x02` or bulk IN `0x84`. Any future capture or
 hardware integration must additionally bind it to the already verified
 `17e9:4323`, revision `0x3156`, interface-0 topology before supplying data.
+
+The next offline layer is also implemented. It adds a fixed-storage partial-
+order matcher, an auditable fact registry, provisional transition recognizers,
+a monotonic traffic-regime classifier, sanitizer tests, and a deterministic
+metadata mutation harness. Run it with:
+
+```sh
+make protocol-model-lab
+make test-sanitized
+make fuzz-transition
+```
+
+The protocol-model lab binds every parser to the current attachment generation
+and fake-transport lifecycle epoch of an exact, topology-verified fake machine.
+It recognizes only the repeated
+24-transfer insertion-correlated prefix and either complete member of the
+closed two-profile, 29-transfer removal-correlated union. It rejects profile
+hybrids, unobserved orders, malformed metadata, truncation, and a detached,
+reconnected, or closed-and-reopened transport. Source-authored nonzero bodies
+pass through the fake
+queue; no captured body is present. Large 1,088- and 65,536-byte declarations
+are exercised only as payload-free classifier metadata.
+
+Read machine-readable [`facts.tsv`](facts.tsv) and its human explanation in
+[`FACTS.md`](FACTS.md) for the fact mapping and evidence maturity ladder, and
+[`OFFLINE-PROTOCOL-MODEL.md`](OFFLINE-PROTOCOL-MODEL.md) for the exact bounds,
+failure states, fuzz boundary, and promotion gates. These matches remain
+observational and do not identify activation, display state, protocol fields,
+or bytes safe to transmit.
 
 An additional **opt-in** tool reads the standard USB configuration descriptor
 to report endpoint addresses and packet sizes. It allows only `17e9:4323`,
@@ -166,9 +196,9 @@ light a DisplayLink-connected monitor and is not a replacement display driver.
 
 The requested trace matrix now documents repeatable startup, HDMI-absent,
 HDMI-2/HDMI-3, insertion, and removal behavior at the metadata boundary. The
-next safe gate is offline: derive only independently supportable message
-structure, add bounded parsers and fuzz targets, and exercise them through the
-existing fake transport. No captured OUT body is eligible for replay, and no
+bounded offline-recognizer milestone is implemented and fuzzed. The next safe
+gate is independent evidence for actual message framing; transfer-shape matches
+alone do not establish it. No captured OUT body is eligible for replay, and no
 code is allowed to send bytes to real hardware until request construction has
 an independent specification. A macOS
 implementation would still need a supported way to publish a desktop display

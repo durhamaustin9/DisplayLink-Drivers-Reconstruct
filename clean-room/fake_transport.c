@@ -1,6 +1,33 @@
 #include "fake_transport.h"
 
+#include <stdatomic.h>
 #include <string.h>
+
+static _Atomic uint64_t next_lifecycle_epoch = UINT64_C(1);
+
+static uint64_t
+take_lifecycle_epoch(void)
+{
+    uint64_t current = atomic_load_explicit(&next_lifecycle_epoch,
+        memory_order_relaxed);
+    for (;;) {
+        if (current == UINT64_MAX) {
+            return 0U;
+        }
+        uint64_t next = current + UINT64_C(1);
+        if (atomic_compare_exchange_weak_explicit(&next_lifecycle_epoch,
+                &current, next, memory_order_relaxed,
+                memory_order_relaxed)) {
+            return current;
+        }
+    }
+}
+
+static void
+advance_lifecycle_epoch(DBFakeTransport *fake)
+{
+    fake->lifecycle_epoch = take_lifecycle_epoch();
+}
 
 static void
 queue_clear(DBFakeQueue *queue)
@@ -62,6 +89,7 @@ fake_open(void *context)
     if (!fake->open) {
         fake->open = 1;
         ++fake->open_count;
+        advance_lifecycle_epoch(fake);
     }
     return DB_TRANSPORT_OK;
 }
@@ -73,9 +101,24 @@ fake_close(void *context)
     if (fake->open) {
         fake->open = 0;
         ++fake->close_count;
+        advance_lifecycle_epoch(fake);
     }
     queue_clear(&fake->host_to_dock);
     queue_clear(&fake->dock_to_host);
+}
+
+static int
+fake_is_open(const void *context)
+{
+    const DBFakeTransport *fake = context;
+    return fake != NULL && fake->connected && fake->open;
+}
+
+static uint64_t
+fake_lifecycle_epoch(const void *context)
+{
+    const DBFakeTransport *fake = context;
+    return fake == NULL ? 0U : fake->lifecycle_epoch;
 }
 
 static DBTransportResult
@@ -125,6 +168,8 @@ fake_read(void *context, uint8_t endpoint, uint8_t *bytes,
 static const DBTransportOperations fake_operations = {
     .open = fake_open,
     .close = fake_close,
+    .is_open = fake_is_open,
+    .lifecycle_epoch = fake_lifecycle_epoch,
     .write = fake_write,
     .read = fake_read
 };
@@ -136,7 +181,8 @@ db_fake_transport_initialize(DBFakeTransport *fake, DBTransport *transport)
         return;
     }
     *fake = (DBFakeTransport) {
-        .connected = 1
+        .connected = 1,
+        .lifecycle_epoch = take_lifecycle_epoch()
     };
     *transport = (DBTransport) {
         .kind = DB_TRANSPORT_KIND_FAKE,
@@ -148,18 +194,25 @@ db_fake_transport_initialize(DBFakeTransport *fake, DBTransport *transport)
 void
 db_fake_transport_disconnect(DBFakeTransport *fake)
 {
-    if (fake == NULL) {
+    if (fake == NULL || !fake->connected) {
         return;
     }
     fake->connected = 0;
-    fake_close(fake);
+    if (fake->open) {
+        fake->open = 0;
+        ++fake->close_count;
+    }
+    queue_clear(&fake->host_to_dock);
+    queue_clear(&fake->dock_to_host);
+    advance_lifecycle_epoch(fake);
 }
 
 void
 db_fake_transport_reconnect(DBFakeTransport *fake)
 {
-    if (fake != NULL) {
+    if (fake != NULL && !fake->connected) {
         fake->connected = 1;
+        advance_lifecycle_epoch(fake);
     }
 }
 

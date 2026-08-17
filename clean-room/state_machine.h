@@ -66,11 +66,13 @@ typedef struct {
     DBTransport *transport;
     DBMachineDeviceIdentity identity;
     DBMachineTopology topology;
-    unsigned long generation;
+    uint64_t generation;
+    uint64_t transport_lifecycle_epoch;
     DBTransportResult last_transport_result;
 } DBMachine;
 
 void db_machine_initialize(DBMachine *machine, DBTransport *transport);
+int db_machine_is_exact_verified(const DBMachine *machine);
 DBMachineResult db_machine_attach(DBMachine *machine,
     const DBMachineDeviceIdentity *identity);
 DBMachineResult db_machine_verify_topology(DBMachine *machine,

@@ -35,7 +35,18 @@ The first independent milestone is implemented and tested:
 - models `0x02`/`0x84` with bounded, in-memory packet queues;
 - validates the 15-role shape and the two observed adjacent-order variants of
   the first data-bearing burst using synthetic transfers, without interpreting
-  bytes beyond the provisional IN length prefix; and
+  bytes beyond the provisional IN length prefix;
+- maps every current structural-model rule to a machine-readable evidence
+  registry and an explicit E0–E8 promotion ladder;
+- recognizes only the repeated 24-transfer insertion-correlated prefix and the
+  closed union of the two 29-transfer removal-correlated profiles;
+- rejects cross-profile hybrids, unauthorized swaps, malformed envelopes,
+  stale fake-machine generations, and premature completion;
+- classifies explicitly finished metadata windows as empty, small-only,
+  above-1024 OUT, or 65,536-byte OUT observations without inferring HDMI or
+  video state;
+- runs deterministic mutation tests plus AddressSanitizer and
+  UndefinedBehaviorSanitizer with no raw-capture corpus; and
 - stops its device state machine at a protocol-undocumented gate with zero
   attempted writes.
 
@@ -51,6 +62,9 @@ make -C clean-room checker
 make descriptors
 make fake-lab
 make exchange-lab
+make protocol-model-lab
+make test-sanitized
+make fuzz-transition
 make activation-check
 ```
 
@@ -84,6 +98,18 @@ establish command meanings or an independently authored request. See the
 The separately documented HDMI hotplug and hot-unplug trials qualify the
 [small-polling/large-streaming transition](clean-room/observations/windows-native-usbpcap-hdmi-transitions-2026-08-17.md)
 at the metadata level only.
+
+`make protocol-model-lab` applies those sanitized transition facts to fixed-
+storage parsers bound to an exact, topology-verified fake machine. It accepts
+the repeated 24-transfer insertion-correlated prefix and either complete
+29-transfer removal-correlated profile, but rejects a hybrid assembled from
+both. All bodies are fresh source-authored patterns. Its 32 OUT operations and
+50 IN operations occur only inside the in-memory fake transport; the resulting
+binary links no IOKit or IOUSBHost framework, and real-hardware writes remain
+zero. `make fuzz-transition` runs 100,000 deterministic metadata mutations;
+`make test-sanitized` runs the model suite under ASan and UBSan. See the
+[qualified fact registry](clean-room/FACTS.md) and the
+[offline model specification](clean-room/OFFLINE-PROTOCOL-MODEL.md).
 
 After quitting DockBridge completely, `make read-descriptors` performs an
 explicitly opted-in USB-standard configuration-descriptor read against only
@@ -175,9 +201,11 @@ implementation work. The remaining stages are gated deliberately:
 1. preserve public USB descriptors for this exact hardware without identifiers;
 2. preserve the three validated black-box activation-window envelopes and
    reproduce their conservative timing bound on a native host or analyzer;
-3. turn only stable, reviewed Ella facts into bounded parsers, corpus tests, and
-   fuzz targets on the implemented fake transport/state skeleton;
-4. prove cold/warm activation and mode selection without copying firmware,
+3. **completed for the current metadata milestone:** turn reviewed structural
+   facts into bounded partial-order parsers, synthetic tests, a deterministic
+   mutation harness, and fake-transport models;
+4. independently establish actual message framing, then prove cold/warm
+   activation and mode selection without copying firmware,
    executable code, keys, or vendor resources;
 5. implement damage encoding and USB transport behind an exact device allowlist;
 6. choose a macOS publication/capture architecture with honest privacy UI; and

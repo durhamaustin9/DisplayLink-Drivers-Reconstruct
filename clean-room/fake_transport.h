@@ -27,6 +27,7 @@ typedef struct {
 typedef struct {
     int connected;
     int open;
+    uint64_t lifecycle_epoch;
     DBFakeQueue host_to_dock;
     DBFakeQueue dock_to_host;
     size_t open_count;

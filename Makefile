@@ -7,7 +7,7 @@ CORE_APP ?= $(CURDIR)/build/DockBridge Engine.app
 CONTROLLER_APP ?= $(CURDIR)/build/DockBridge.app
 INSTALLED_CONTROLLER_APP ?= /Applications/DockBridge.app
 
-.PHONY: help test probe descriptors read-descriptors fake-lab exchange-lab activation-check test-clean-room prepare local core controller verify verify-local verify-core verify-controller verify-installed integration-local integration-core integration-contained install-contained open-contained tools
+.PHONY: help test probe descriptors read-descriptors fake-lab exchange-lab protocol-model-lab fuzz-transition fuzz-libfuzzer test-sanitized activation-check test-clean-room prepare local core controller verify verify-local verify-core verify-controller verify-installed integration-local integration-core integration-contained install-contained open-contained tools
 
 help:
 	@echo "Independent, read-only hardware work (no DisplayLink software):"
@@ -16,6 +16,9 @@ help:
 	@echo "  make read-descriptors  # run it; DockBridge must be completely quit"
 	@echo "  make fake-lab          # run the in-memory zero-write state machine"
 	@echo "  make exchange-lab      # parse the first observed burst using synthetic transfers"
+	@echo "  make protocol-model-lab # run bounded transition models on the fake transport"
+	@echo "  make test-sanitized    # run offline models under ASan and UBSan"
+	@echo "  make fuzz-transition   # run 100,000 deterministic metadata mutations"
 	@echo "  make activation-check  # build the metadata-only activation checker"
 	@echo "  make test-clean-room"
 	@echo
@@ -56,6 +59,19 @@ fake-lab:
 exchange-lab:
 	$(MAKE) -C clean-room exchange-lab
 	./clean-room/build/exchange-lab
+
+protocol-model-lab:
+	$(MAKE) -C clean-room protocol-model-lab
+	./clean-room/build/protocol-model-lab
+
+test-sanitized:
+	$(MAKE) -C clean-room test-sanitized
+
+fuzz-transition:
+	$(MAKE) -C clean-room fuzz-transition
+
+fuzz-libfuzzer:
+	$(MAKE) -C clean-room fuzz-libfuzzer
 
 activation-check:
 	$(MAKE) -C clean-room activation-check

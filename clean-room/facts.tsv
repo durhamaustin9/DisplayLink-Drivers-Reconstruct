@@ -1,0 +1,13 @@
+fact_id	maturity	disposition	trials	contradiction	boundary	sources
+FACT-TOPOLOGY-001	E3	active	15	none	standard-descriptor-and-usbpcap	observations/ud-3900pdz-revision-3156.md;observations/windows-native-usbpcap-cold-2026-08-17.md;observations/windows-native-usbpcap-hdmi-transitions-2026-08-17.md
+FACT-IN-ENVELOPE-001	E3	active	15	none	usbpcap-transfer-metadata	observations/windows-native-usbpcap-cold-2026-08-17.md;observations/windows-native-usbpcap-hdmi-transitions-2026-08-17.md
+FACT-OUT-ALIGNMENT-001	E3	active	15	none	usbpcap-transfer-metadata	observations/windows-native-usbpcap-cold-2026-08-17.md;observations/windows-native-usbpcap-hdmi-transitions-2026-08-17.md
+FACT-STARTUP-ROLES-001	E3	active	11	none	usbpcap-first-burst	observations/windows-native-usbpcap-cold-2026-08-17.md
+FACT-STARTUP-ORDER-001	E3	active	11	one-adjacent-order-alternative	usbpcap-first-burst	observations/windows-native-usbpcap-cold-2026-08-17.md
+FACT-STARTUP-TOTAL-ORDER-000	E1	rejected	1	powercycle-03	usbpcap-first-burst	observations/windows-native-usbpcap-cold-2026-08-17.md
+FACT-NO-HDMI-SMALL-001	E3	active	3	none	observer-reported-hdmi-absent-window	observations/windows-native-usbpcap-cold-2026-08-17.md
+FACT-HDMI3-SLOT-001	E2	provisional	2	none	observer-reported-port-correlation	observations/windows-native-usbpcap-cold-2026-08-17.md
+FACT-HOTPLUG-PREFIX-001	E2	provisional	2	none	observer-reported-hdmi-insertion-window	observations/windows-native-usbpcap-hdmi-transitions-2026-08-17.md
+FACT-HOTUNPLUG-PROFILES-001	E2	provisional	2	none	observer-reported-hdmi-removal-window	observations/windows-native-usbpcap-hdmi-transitions-2026-08-17.md
+FACT-LARGE-OUT-BOUNDARY-001	E2	provisional	4	none	usbpcap-transition-window	observations/windows-native-usbpcap-hdmi-transitions-2026-08-17.md
+FACT-CAPTURE-LIMIT-001	E1	active	15	snapshot-truncation-after-large-out	usbpcap-file-quality	observations/windows-native-usbpcap-cold-2026-08-17.md;observations/windows-native-usbpcap-hdmi-transitions-2026-08-17.md
