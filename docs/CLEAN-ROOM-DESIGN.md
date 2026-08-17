@@ -5,7 +5,7 @@ Status reviewed: 2026-08-17
 This is a proposed architecture, not a finished driver and not a claim that a
 formal two-team clean-room process has already occurred. The only implemented
 independent components are the read-only descriptor probe, bounded offline
-observation parsers, a provisional first-burst structural parser, and an
+observation parsers, a three-trial-qualified first-burst structural parser, and an
 in-memory fake transport with a protocol-gated device state machine in
 `clean-room/`. None carries a captured vendor payload.
 
@@ -16,14 +16,14 @@ rejects payload fields and semantic command labels. Its fake replay constructs
 only zero-filled chunks; endpoint-zero control records remain unreplayed. No
 captured payload enters that parser or replay.
 
-A native Windows USBPcap cold trial now establishes one first-burst
-direction/length shape plus two provisional structural patterns: payload-
-bearing IN transfers use a four-byte length envelope in that trace, and every
-observed OUT declaration is positive and 16-byte aligned. The parser validates
-only that shape using source-authored synthetic bodies. It does not identify an
-activation command, interpret a body field, or enable a real transport. Two
-matching cold trials are still required before stable and variable fields can
-be classified.
+Three native Windows USBPcap reconnect trials establish one repeatable first-
+burst direction/length shape plus two structural correlations: every complete
+payload-bearing IN transfer uses the observed four-byte length prefix, and
+every OUT declaration is positive and 16-byte aligned. Comparison found three
+trial-variable position ranges totaling 144 bytes; the source records only
+their offsets and lengths, never any captured value. The parser validates only
+this structure using source-authored synthetic bodies. It does not identify an
+activation command, interpret the variable ranges, or enable a real transport.
 
 ## Verified starting point
 

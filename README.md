@@ -67,16 +67,17 @@ visible-output upper bound. This documents transfer shape, not payload format,
 command meaning, or exact activation latency. See the
 [activation envelope specification](clean-room/ACTIVATION-ENVELOPE.md).
 
-`make exchange-lab` exercises a provisional first-burst parser entirely
-against the fake transport. A native Windows USBPcap cold trial observed the
-15-transfer direction/length shape and two provisional structural patterns:
-payload-bearing IN transfers had a bounded four-byte length envelope, and all
-observed OUT transfer lengths were positive and 16-byte aligned. The lab
-constructs fresh deterministic nonzero synthetic bodies; it contains no captured message,
-key, firmware, or screen data. The real-device
-state machine remains blocked because one payload-bearing cold trial is not
-enough to classify dynamic fields or establish command meanings. See the
-[sanitized cold-start observation](clean-room/observations/windows-native-usbpcap-cold-2026-08-17.md).
+`make exchange-lab` exercises a three-trial-qualified first-burst parser
+entirely against the fake transport. Three native Windows USBPcap reconnect
+trials reproduced the exact 15-transfer direction/length shape. Across them,
+all complete payload-bearing IN transfers had the same bounded four-byte length
+prefix and every observed OUT declaration was positive and 16-byte aligned.
+The lab constructs fresh deterministic nonzero synthetic bodies and records
+only three trial-variable position ranges; it contains no captured value,
+message, key, firmware, or screen data. The real-device state machine remains
+blocked because these correlations do not establish command meanings or an
+independently authored request. See the
+[sanitized cold-connect observations](clean-room/observations/windows-native-usbpcap-cold-2026-08-17.md).
 
 After quitting DockBridge completely, `make read-descriptors` performs an
 explicitly opted-in USB-standard configuration-descriptor read against only
@@ -109,7 +110,7 @@ DL-3900/Ella revision still need independent documentation and tests.
 | Attached display | HP Z27H, reported at 1920×1080/144 Hz on 2026-08-13 |
 | Independent probe | Device and seven interface descriptors found read-only |
 | Independent clean-room USB video | Not implemented or demonstrated |
-| External black-box USB video | HDMI 2, 1920×1080/60 Hz; three Windows ARM64 guest trials plus one native Windows USBPcap cold start |
+| External black-box USB video | HDMI 2, 1920×1080/60 Hz; three Windows ARM64 guest trials plus three native Windows USBPcap reconnect trials |
 
 An earlier version of this README incorrectly treated the 144 Hz external
 display as proof that the experimental Core derivative was driving HDMI 2/3.

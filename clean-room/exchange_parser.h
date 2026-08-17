@@ -32,12 +32,26 @@ typedef enum {
     DB_EXCHANGE_ALREADY_COMPLETE
 } DBExchangeResult;
 
+/*
+ * Byte-position correlation across three controlled cold-connect trials.
+ * A zero variable length means no variation was observed; it does not prove
+ * that the transfer is a protocol constant under different conditions.
+ */
+typedef struct {
+    DBExchangeDirection direction;
+    size_t length;
+    size_t trial_variable_offset;
+    size_t trial_variable_length;
+} DBExchangeTransferStructure;
+
 typedef struct {
     DBExchangeState state;
     size_t next_frame_index;
 } DBExchangeParser;
 
 void db_exchange_parser_initialize(DBExchangeParser *parser);
+DBExchangeResult db_exchange_phase_a_structure(size_t transfer_index,
+    DBExchangeTransferStructure *structure);
 DBExchangeResult db_exchange_validate_frame(DBExchangeDirection direction,
     uint8_t endpoint, const uint8_t *bytes, size_t length);
 DBExchangeResult db_exchange_parser_accept(DBExchangeParser *parser,

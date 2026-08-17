@@ -34,9 +34,9 @@ write function, and its test requires both attempted and successful write
 counters to remain zero. Synthetic inbound packets can be injected into the
 fake dock for future parser tests, but no protocol payload has been invented.
 
-A separate parser now validates only the provisional structure and ordered
-direction/length shape of the first observed data-bearing burst at the USB
-boundary. Exercise it with:
+A separate parser now validates only the three-trial-qualified structure and
+ordered direction/length shape of the first observed data-bearing burst at the
+USB boundary. Exercise it with:
 
 ```sh
 make exchange-lab
@@ -44,11 +44,11 @@ make exchange-lab
 
 The lab creates deterministic nonzero synthetic transfers, sends them only
 through the in-memory fake transport, and requires the parser to reach
-`complete` after 15 ordered transfers. It validates the provisional four-byte
-IN length prefix and OUT length alignment without assigning any other field or
-command meaning. It has no real-device transport. The fixture is provisional
-pending two more matching native Windows cold-start captures. The reviewed
-facts and capture limitations are recorded in
+`complete` after 15 ordered transfers. It validates the observed four-byte IN
+length prefix and OUT length alignment without assigning any other field or
+command meaning. It records three trial-variable position ranges without
+storing either the matching or varying captured values. It has no real-device
+transport. The reviewed facts and capture limitations are recorded in
 [`observations/windows-native-usbpcap-cold-2026-08-17.md`](observations/windows-native-usbpcap-cold-2026-08-17.md).
 
 The parser accepts the endpoint address with every transfer and rejects

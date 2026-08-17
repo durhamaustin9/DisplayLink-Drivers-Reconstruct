@@ -421,6 +421,8 @@ exchange_lab_output="$controller_check_root/exchange-lab-output.txt"
     fail "first-burst lab failed"
 /usr/bin/grep -F -q 'frames=15 writes=7 reads=8 parser-state=complete' \
     "$exchange_lab_output" || fail "first-burst lab did not parse the full shape"
+/usr/bin/grep -F -q 'trial-variable-windows=3 trial-variable-bytes=144' \
+    "$exchange_lab_output" || fail "first-burst lab lost its three-trial position mask"
 /usr/bin/grep -F -q 'hardware remains disabled' "$exchange_lab_output" || \
     fail "first-burst lab did not retain its hardware-disabled boundary"
 if /usr/bin/otool -L "$clean_room_exchange_lab" | /usr/bin/grep -E -q -- \
@@ -568,7 +570,7 @@ while IFS= read -r -d '' relative_path; do
         .work/*|build/*|dist/*|artifacts/*|vendor/*|expanded/*|captures/*|observations-private/*|tools/build/*|.codex/*|.agents/*|.claude/*|.cursor/*|.idea/*|.vscode/*|*/.work/*|*/build/*|*/dist/*|*/artifacts/*|*/vendor/*|*/expanded/*|*/captures/*|*/observations-private/*|*/.codex/*|*/.agents/*|*/.claude/*|*/.cursor/*|*/.idea/*|*/.vscode/*)
             fail "tracked path is inside a private/generated directory: $relative_path"
             ;;
-        *.pkg|*.dmg|*.zip|*.tar|*.tgz|*.gz|*.bz2|*.xz|*.7z|*.rar|*.spkg|*.metallib|*.car|*.mov|*.icns|*.png|*.xar|*.bom|*.der|*.codedirectory|*.cer|*.crt|*.p12|*.pfx|*.pem|*.key|*.mobileprovision|*.dbobs|*.dba|*.app/*|*/_CodeSignature/*|*/CodeResources)
+        *.pkg|*.dmg|*.zip|*.tar|*.tgz|*.gz|*.bz2|*.xz|*.7z|*.rar|*.spkg|*.metallib|*.car|*.mov|*.icns|*.png|*.xar|*.bom|*.der|*.codedirectory|*.cer|*.crt|*.p12|*.pfx|*.pem|*.key|*.mobileprovision|*.etl|*.pcap|*.pcapng|*.cap|*.dbobs|*.dba|*.app/*|*/_CodeSignature/*|*/CodeResources)
             fail "tracked proprietary/generated artifact type: $relative_path"
             ;;
     esac

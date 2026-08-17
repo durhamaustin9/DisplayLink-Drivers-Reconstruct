@@ -61,7 +61,7 @@ mode setting, frame records, compression, or recovery behavior. A later
 confirmed repeated traffic and visible output on the two candidate endpoints,
 but it does not reveal payload format or command meaning and is not a physical
 Mac-bus trace. A later
-[native Windows USBPcap cold-start observation](windows-native-usbpcap-cold-2026-08-17.md)
-captured one complete first data-bearing burst and provisional structural
-patterns; later activation phases remain uninterpreted, and the trace does not
+[native Windows USBPcap cold-connect observations](windows-native-usbpcap-cold-2026-08-17.md)
+captured three complete first data-bearing bursts and repeated structural
+patterns; later activation phases remain uninterpreted, and the traces do not
 establish command semantics.

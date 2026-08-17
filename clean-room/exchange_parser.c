@@ -1,30 +1,27 @@
 #include "exchange_parser.h"
 
-typedef struct {
-    DBExchangeDirection direction;
-    size_t length;
-} DBExchangeShape;
-
 /*
  * Externally observed phase-A transfer shape. The table contains no captured
- * bytes and assigns no command meaning to any frame.
+ * bytes and assigns no command meaning to any transfer. Variable ranges are
+ * byte-position correlations across three trials, not interpreted fields.
  */
-static const DBExchangeShape phase_a_shape[DB_EXCHANGE_PHASE_A_FRAME_COUNT] = {
-    {DB_EXCHANGE_DIRECTION_OUT, 16},
-    {DB_EXCHANGE_DIRECTION_OUT, 32},
-    {DB_EXCHANGE_DIRECTION_OUT, 80},
-    {DB_EXCHANGE_DIRECTION_IN, 39},
-    {DB_EXCHANGE_DIRECTION_OUT, 48},
-    {DB_EXCHANGE_DIRECTION_IN, 38},
-    {DB_EXCHANGE_DIRECTION_OUT, 64},
-    {DB_EXCHANGE_DIRECTION_IN, 38},
-    {DB_EXCHANGE_DIRECTION_OUT, 64},
-    {DB_EXCHANGE_DIRECTION_IN, 38},
-    {DB_EXCHANGE_DIRECTION_IN, 549},
-    {DB_EXCHANGE_DIRECTION_IN, 31},
-    {DB_EXCHANGE_DIRECTION_OUT, 176},
-    {DB_EXCHANGE_DIRECTION_IN, 38},
-    {DB_EXCHANGE_DIRECTION_IN, 34}
+static const DBExchangeTransferStructure
+phase_a_shape[DB_EXCHANGE_PHASE_A_FRAME_COUNT] = {
+    {DB_EXCHANGE_DIRECTION_OUT, 16, 0, 0},
+    {DB_EXCHANGE_DIRECTION_OUT, 32, 0, 0},
+    {DB_EXCHANGE_DIRECTION_OUT, 80, 0, 0},
+    {DB_EXCHANGE_DIRECTION_IN, 39, 0, 0},
+    {DB_EXCHANGE_DIRECTION_OUT, 48, 0, 0},
+    {DB_EXCHANGE_DIRECTION_IN, 38, 0, 0},
+    {DB_EXCHANGE_DIRECTION_OUT, 64, 44, 8},
+    {DB_EXCHANGE_DIRECTION_IN, 38, 0, 0},
+    {DB_EXCHANGE_DIRECTION_OUT, 64, 0, 0},
+    {DB_EXCHANGE_DIRECTION_IN, 38, 0, 0},
+    {DB_EXCHANGE_DIRECTION_IN, 549, 0, 0},
+    {DB_EXCHANGE_DIRECTION_IN, 31, 0, 0},
+    {DB_EXCHANGE_DIRECTION_OUT, 176, 44, 128},
+    {DB_EXCHANGE_DIRECTION_IN, 38, 0, 0},
+    {DB_EXCHANGE_DIRECTION_IN, 34, 26, 8}
 };
 
 static int
@@ -52,6 +49,18 @@ db_exchange_parser_initialize(DBExchangeParser *parser)
             .state = DB_EXCHANGE_WAITING
         };
     }
+}
+
+DBExchangeResult
+db_exchange_phase_a_structure(size_t transfer_index,
+    DBExchangeTransferStructure *structure)
+{
+    if (structure == NULL ||
+        transfer_index >= DB_EXCHANGE_PHASE_A_FRAME_COUNT) {
+        return DB_EXCHANGE_INVALID_ARGUMENT;
+    }
+    *structure = phase_a_shape[transfer_index];
+    return DB_EXCHANGE_OK;
 }
 
 DBExchangeResult
@@ -102,7 +111,7 @@ db_exchange_parser_accept(DBExchangeParser *parser,
         parser->state = DB_EXCHANGE_FAILED;
         return validation;
     }
-    const DBExchangeShape *expected =
+    const DBExchangeTransferStructure *expected =
         &phase_a_shape[parser->next_frame_index];
     if (direction != expected->direction || length != expected->length) {
         parser->state = DB_EXCHANGE_FAILED;

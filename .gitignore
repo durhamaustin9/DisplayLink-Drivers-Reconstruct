@@ -73,8 +73,12 @@ clean-room/build/
 *.log
 *.trace
 *.etl
+*.etl.*
 *.pcap
+*.pcap.*
 *.pcapng
+*.pcapng.*
+*.cap
 usbtrace*.csv
 usbtrace*.xml
 *.dbobs
